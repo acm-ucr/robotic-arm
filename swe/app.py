@@ -103,18 +103,3 @@ while cam.isOpened():
         break
 
 cam.release()
-
-# 3 lists for middle, index, thumb. or a 2d array with x-y values for each joint
-
-# thumb_x, thumb_y, index_x, index_y, mid_x, mid_y
-# thumb_x, thumb_y, index_x, index_y, mid_x, mid_y
-# thumb_x, thumb_y, index_x, index_y, mid_x, mid_y
-# . . .
-# . . .
-# each line is a new recorded position, file will get constnatly get uploaded so long as the camera is open
-
-
-# record a new recording every 0.5 seconds
-# export to a csv file
-# upload that to pands as a data frame
-
