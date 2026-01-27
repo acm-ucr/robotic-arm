@@ -10,7 +10,7 @@ hands = mp_hands.Hands(
 )
 
 # Initializing CSV outputs
-positions = ['thumb_x', 'thumb_y', 'index_x', 'index_y', 'mid_x', 'mid_y']
+positions = ['thumb_x', 'thumb_y', 'index_x', 'index_y', 'mid_x', 'mid_y', 'wrist_x', 'wrist_y']
 csv_file_path = 'positions.csv'
 last_save_time = 0
 save_time_interval = 0.5 # seconds
@@ -18,7 +18,7 @@ save_time_interval = 0.5 # seconds
 # Initialize CSV once
 with open(csv_file_path, mode='w', newline='') as csvfile:
     csv_writer = csv.writer(csvfile)
-    csv_writer.writerow(['thumb_x', 'thumb_y', 'index_x', 'index_y', 'mid_x', 'mid_y'])
+    csv_writer.writerow(['thumb_x', 'thumb_y', 'index_x', 'index_y', 'mid_x', 'mid_y', 'wrist_x', 'wrist_y'])
 
 cam = cv.VideoCapture(0)
 
@@ -61,7 +61,8 @@ while cam.isOpened():
                     cv.line(frame, poly_coords[i], poly_coords[i+1], (255, 0, 0), 2)
 
 
-            # Access the Tips
+            # Access the Tips]
+            wrist_landmark = hand_landmarks.landmark[0]
             thumb_tip = hand_landmarks.landmark[4]
             index_tip = hand_landmarks.landmark[8]
             middle_tip = hand_landmarks.landmark[12]
@@ -70,11 +71,13 @@ while cam.isOpened():
             tx, ty = int(thumb_tip.x * w), int(thumb_tip.y * h)
             cx, cy = int(index_tip.x * w), int(index_tip.y * h)
             mx, my = int(middle_tip.x * w), int(middle_tip.y * h)
+            wx, wy = int(wrist_landmark.x * w), int(wrist_landmark.y * h)
             
             # Draw big circles on tips
             cv.circle(frame, (tx, ty), 15, (255, 255, 0), cv.FILLED)
             cv.circle(frame, (cx, cy), 15, (0, 255, 255), cv.FILLED)
             cv.circle(frame, (mx, my), 15, (255, 0, 255), cv.FILLED)
+            cv.circle(frame, (wx, wy), 15, (255, 255, 255), cv.FILLED)
 
             # Display Coordinates text
             cv.putText(frame, f"Thumb: ({tx}, {ty})", (tx + 20, ty - 30), 
@@ -86,6 +89,9 @@ while cam.isOpened():
             cv.putText(frame, f"Middle: ({mx}, {my})", (mx + 20, my - 30), 
                        cv.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
             
+            cv.putText(frame, f"Wrist: ({wx}, {wy})", (wx + 20, wy - 30), 
+                       cv.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+            
             current_time = time.time()
             if current_time - last_save_time >= save_time_interval:
                 last_save_time = current_time
@@ -94,7 +100,7 @@ while cam.isOpened():
                     csv_writer = csv.writer(csvfile)
 
                     # writing data to file
-                    csv_writer.writerow([tx, ty, cx, cy, mx, my])
+                    csv_writer.writerow([tx, ty, cx, cy, mx, my, wx, wy])
 
 
     cv.imshow("Show Video", frame)
