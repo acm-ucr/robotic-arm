@@ -1,11 +1,24 @@
 import cv2 as cv
 import mediapipe.python.solutions.hands as mp_hands
+import csv
+import time
 
 hands = mp_hands.Hands(
     static_image_mode=False,
     max_num_hands=2,
     min_detection_confidence=0.5
 )
+
+# Initializing CSV outputs
+positions = ['thumb_x', 'thumb_y', 'index_x', 'index_y', 'mid_x', 'mid_y']
+csv_file_path = 'positions.csv'
+last_save_time = 0
+save_time_interval = 0.5 # seconds
+
+# Initialize CSV once
+with open(csv_file_path, mode='w', newline='') as csvfile:
+    csv_writer = csv.writer(csvfile)
+    csv_writer.writerow(['thumb_x', 'thumb_y', 'index_x', 'index_y', 'mid_x', 'mid_y'])
 
 cam = cv.VideoCapture(0)
 
@@ -72,6 +85,17 @@ while cam.isOpened():
             
             cv.putText(frame, f"Middle: ({mx}, {my})", (mx + 20, my - 30), 
                        cv.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+            
+            current_time = time.time()
+            if current_time - last_save_time >= save_time_interval:
+                last_save_time = current_time
+                with open(csv_file_path, mode='a', newline='') as csvfile:
+                    # create CSV writer object
+                    csv_writer = csv.writer(csvfile)
+
+                    # writing data to file
+                    csv_writer.writerow([tx, ty, cx, cy, mx, my])
+
 
     cv.imshow("Show Video", frame)
 
@@ -79,3 +103,18 @@ while cam.isOpened():
         break
 
 cam.release()
+
+# 3 lists for middle, index, thumb. or a 2d array with x-y values for each joint
+
+# thumb_x, thumb_y, index_x, index_y, mid_x, mid_y
+# thumb_x, thumb_y, index_x, index_y, mid_x, mid_y
+# thumb_x, thumb_y, index_x, index_y, mid_x, mid_y
+# . . .
+# . . .
+# each line is a new recorded position, file will get constnatly get uploaded so long as the camera is open
+
+
+# record a new recording every 0.5 seconds
+# export to a csv file
+# upload that to pands as a data frame
+
