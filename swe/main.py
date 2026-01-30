@@ -3,6 +3,7 @@ import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 import math
+from mqtt_sender import send_coordinates
 
 # -----------------------------
 # CONFIG
@@ -90,7 +91,7 @@ RunningMode = vision.RunningMode
 options = HandLandmarkerOptions(
     base_options=BaseOptions(model_asset_path=MODEL_PATH),
     running_mode=RunningMode.VIDEO,
-    num_hands=2
+    num_hands=1  # Track only one hand
 )
 
 landmarker = HandLandmarker.create_from_options(options)
@@ -119,79 +120,82 @@ while True:
     # DRAW LANDMARKS & CALCULATE OPENNESS
     # -----------------------------
     if result.hand_landmarks:
-        for hand_idx, hand_landmarks in enumerate(result.hand_landmarks):
-            points = []
+        # Only process the first hand (since num_hands=1)
+        hand_landmarks = result.hand_landmarks[0]
+        points = []
 
-            # Convert normalized landmarks → pixel coords
-            for lm in hand_landmarks:
-                x = int(lm.x * frame.shape[1])
-                y = int(lm.y * frame.shape[0])
-                points.append((x, y))
+        # Convert normalized landmarks → pixel coords
+        for lm in hand_landmarks:
+            x = int(lm.x * frame.shape[1])
+            y = int(lm.y * frame.shape[0])
+            points.append((x, y))
 
-            # Calculate hand openness percentage
-            openness_percentage = calculate_hand_openness(points)
-            
-            # Draw palm (red)
-            for idx in PALM_INDICES:
-                cv2.circle(frame, points[idx], DOT_RADIUS, PALM_COLOR, -1)
+        # Calculate hand openness percentage
+        openness_percentage = calculate_hand_openness(points)
+        
+        # Draw palm (red)
+        for idx in PALM_INDICES:
+            cv2.circle(frame, points[idx], DOT_RADIUS, PALM_COLOR, -1)
 
-            # Draw fingers
-            for indices, color in FINGERS.values():
-                # Draw joints
-                for idx in indices:
-                    cv2.circle(frame, points[idx], DOT_RADIUS, color, -1)
+        # Draw fingers
+        for indices, color in FINGERS.values():
+            # Draw joints
+            for idx in indices:
+                cv2.circle(frame, points[idx], DOT_RADIUS, color, -1)
 
-                # Draw bones (connected to wrist)
-                prev = 0
-                for idx in indices:
-                    cv2.line(frame, points[prev], points[idx], color, BONE_THICKNESS)
-                    prev = idx
-            
-            # Display percentage on screen
-            # Position text near the wrist
-            text_position = (points[0][0] - 50, points[0][1] - 30)
-            
-            # Draw background rectangle for better readability
-            text = f"{openness_percentage}%"
-            font = cv2.FONT_HERSHEY_SIMPLEX
-            font_scale = 1.2
-            font_thickness = 3
-            
-            # Get text size for background
-            (text_width, text_height), baseline = cv2.getTextSize(text, font, font_scale, font_thickness)
-            
-            # Draw background rectangle
-            cv2.rectangle(frame, 
-                         (text_position[0] - 10, text_position[1] - text_height - 10),
-                         (text_position[0] + text_width + 10, text_position[1] + baseline + 10),
-                         (0, 0, 0), -1)
-            
-            # Draw text
-            cv2.putText(frame, text, text_position, font, font_scale, 
-                       (255, 255, 255), font_thickness, cv2.LINE_AA)
-            
-            # Optional: Display status text
-            status = "CLOSED" if openness_percentage > 70 else "OPEN" if openness_percentage < 30 else "PARTIAL"
-            status_position = (text_position[0], text_position[1] + 40)
-            cv2.putText(frame, status, status_position, font, 0.6, 
-                       (255, 255, 255), 2, cv2.LINE_AA)
+            # Draw bones (connected to wrist)
+            prev = 0
+            for idx in indices:
+                cv2.line(frame, points[prev], points[idx], color, BONE_THICKNESS)
+                prev = idx
+        
+        # Display percentage on screen
+        # Position text near the wrist
+        text_position = (points[0][0] - 50, points[0][1] - 30)
+        
+        # Draw background rectangle for better readability
+        text = f"{openness_percentage}%"
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 1.2
+        font_thickness = 3
+        
+        # Get text size for background
+        (text_width, text_height), baseline = cv2.getTextSize(text, font, font_scale, font_thickness)
+        
+        # Draw background rectangle
+        cv2.rectangle(frame, 
+                     (text_position[0] - 10, text_position[1] - text_height - 10),
+                     (text_position[0] + text_width + 10, text_position[1] + baseline + 10),
+                     (0, 0, 0), -1)
+        
+        # Draw text
+        cv2.putText(frame, text, text_position, font, font_scale, 
+                   (255, 255, 255), font_thickness, cv2.LINE_AA)
+        
+        # Optional: Display status text
+        status = "CLOSED" if openness_percentage > 70 else "OPEN" if openness_percentage < 30 else "PARTIAL"
+        status_position = (text_position[0], text_position[1] + 40)
+        cv2.putText(frame, status, status_position, font, 0.6, 
+                   (255, 255, 255), 2, cv2.LINE_AA)
 
-            # Calculate palm center coordinates (wrist is point 0)
-            # Max is around 2000,1000
-            palm_x = points[0][0]
-            palm_y = points[0][1]
-            
-            # Convert to bottom-left origin (0,0)
-            # Bottom-left means: x increases rightward, y increases upward
-            frame_height, frame_width = frame.shape[:2]
-            coord_x = palm_x
-            coord_y = frame_height - palm_y
-            
-            # Display coordinates in bottom-right corner of screen
-            coord_text = f"Hand: ({coord_x}, {coord_y})"
-            coord_position = (frame_width - 300, frame_height - 20 - (hand_idx * 30))
-            cv2.putText(frame, coord_text, coord_position, font, 0.7, 
-                       (0, 255, 255), 2, cv2.LINE_AA)
+        # Calculate palm center coordinates (wrist is point 0)
+        palm_x = points[0][0]
+        palm_y = points[0][1]
+        
+        # Convert to bottom-left origin (0,0)
+        # Bottom-left means: x increases rightward, y increases upward
+        frame_height, frame_width = frame.shape[:2]
+        coord_x = palm_x
+        coord_y = frame_height - palm_y
+        
+        # Display coordinates in bottom-right corner of screen
+        coord_text = f"Hand: ({coord_x}, {coord_y})"
+        coord_position = (frame_width - 300, frame_height - 20)
+        cv2.putText(frame, coord_text, coord_position, font, 0.7, 
+                   (0, 255, 255), 2, cv2.LINE_AA)
+        
+        # Send coordinates via MQTT constantly
+        send_coordinates(coord_x, coord_y, openness_percentage)
 
     cv2.imshow("MediaPipe Tasks – Hand Tracking", frame)
 
