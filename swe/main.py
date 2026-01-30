@@ -176,6 +176,23 @@ while True:
             cv2.putText(frame, status, status_position, font, 0.6, 
                        (255, 255, 255), 2, cv2.LINE_AA)
 
+            # Calculate palm center coordinates (wrist is point 0)
+            # Max is around 2000,1000
+            palm_x = points[0][0]
+            palm_y = points[0][1]
+            
+            # Convert to bottom-left origin (0,0)
+            # Bottom-left means: x increases rightward, y increases upward
+            frame_height, frame_width = frame.shape[:2]
+            coord_x = palm_x
+            coord_y = frame_height - palm_y
+            
+            # Display coordinates in bottom-right corner of screen
+            coord_text = f"Hand: ({coord_x}, {coord_y})"
+            coord_position = (frame_width - 300, frame_height - 20 - (hand_idx * 30))
+            cv2.putText(frame, coord_text, coord_position, font, 0.7, 
+                       (0, 255, 255), 2, cv2.LINE_AA)
+
     cv2.imshow("MediaPipe Tasks – Hand Tracking", frame)
 
     if cv2.waitKey(1) & 0xFF == ord("q"):
