@@ -4,7 +4,7 @@ import json
 # MQTT Configuration
 BROKER = "broker.emqx.io"
 PORT = 1883
-TOPIC = "hand/coordinates"
+TOPIC = "robotic_arm/command"
 
 # Initialize and connect to broker
 client = mqtt.Client()
