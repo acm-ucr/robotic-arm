@@ -9,7 +9,7 @@ from mqtt_sender import send_coordinates
 # CONFIG
 # -----------------------------
 MODEL_PATH = "hand_landmarker.task"
-CAM_INDEX = 1
+CAM_INDEX = 0
 
 # -----------------------------
 # FINGER GROUPS + COLORS
@@ -49,17 +49,17 @@ def calculate_hand_openness(points):
     # Calculate distances between each pair of fingertips
     thumb_to_index = calculate_distance(thumb_tip, index_tip)
     thumb_to_middle = calculate_distance(thumb_tip, middle_tip)
-    index_to_middle = calculate_distance(index_tip, middle_tip)
+    #index_to_middle = calculate_distance(index_tip, middle_tip)
     
-    # Average distance between fingertips
-    avg_distance = (thumb_to_index + thumb_to_middle + index_to_middle) / 3
+    # Average distance between fingertips (took out the index_to_middle distane)
+    avg_distance = (thumb_to_index + thumb_to_middle) / 2
     
     # Normalize to percentage (these values may need calibration)
     # Fully open hand: avg_distance ≈ 150-200 pixels (fingers spread apart)
     # Fully closed hand: avg_distance ≈ 20-40 pixels (fingers together)
     
     # Define min/max distances (adjust based on your camera distance)
-    MAX_DISTANCE = 150  # Fully open
+    MAX_DISTANCE = 300  # Fully open
     MIN_DISTANCE = 50   # Fully closed
     
     # Calculate percentage (inverted: small distance = high percentage)
@@ -113,7 +113,7 @@ while True:
         data=frame_rgb
     )
 
-    timestamp_ms += 33  # ~30 FPS
+    timestamp_ms += 33 # ~30 FPS
     result = landmarker.detect_for_video(mp_image, timestamp_ms)
 
     # -----------------------------
@@ -173,7 +173,7 @@ while True:
                    (255, 255, 255), font_thickness, cv2.LINE_AA)
         
         # Optional: Display status text
-        status = "CLOSED" if openness_percentage > 70 else "OPEN" if openness_percentage < 30 else "PARTIAL"
+        status = "CLOSED" if openness_percentage > 90 else "OPEN" if openness_percentage < 30 else "PARTIAL"
         status_position = (text_position[0], text_position[1] + 40)
         cv2.putText(frame, status, status_position, font, 0.6, 
                    (255, 255, 255), 2, cv2.LINE_AA)
@@ -194,8 +194,9 @@ while True:
         cv2.putText(frame, coord_text, coord_position, font, 0.7, 
                    (0, 255, 255), 2, cv2.LINE_AA)
         
-        # Send coordinates via MQTT constantly
-        send_coordinates(coord_x, coord_y, openness_percentage)
+        # Send coordinates via MQTT with a lag of 5 frames
+        if timestamp_ms % 5 == 0:
+            send_coordinates(coord_x, coord_y, openness_percentage)
 
     cv2.imshow("MediaPipe Tasks – Hand Tracking", frame)
 
