@@ -1,0 +1,138 @@
+#include <WiFi.h>
+#include <PubSubClient.h>
+#include <Adafruit_NeoPixel.h>
+#include <SCServo.h>
+
+// --- WIFI & MQTT SETTINGS ---
+const char* ssid = "iPhone123!";          // ENTER YOUR WIFI NAME
+const char* password = "123456789";      // ENTER YOUR WIFI PASSWORD
+const char* mqtt_server = "broker.emqx.io";
+
+// --- SERVO SETTINGS ---
+#define S_RXD 44
+#define S_TXD 43
+SMS_STS st;
+
+// --- CLAW LIMITS ---
+// 0% = Max Position (Open), 100% = Min Position (Closed)
+const int POS_0_PERCENT   = 2861; 
+const int POS_100_PERCENT = 1620; 
+
+// --- LED SETTINGS ---
+#define PIN        48 
+#define NUMPIXELS  1 
+Adafruit_NeoPixel pixels(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800);
+
+WiFiClient espClient;
+PubSubClient client(espClient);
+
+
+int messageCounter = 0; // This keeps track of how many messages we received
+
+// ---------------------------------------------------------
+//  HELPER FUNCTION: MOVES CLAW BASED ON PERCENTAGE
+// ---------------------------------------------------------
+void moveClawToPercent(int percent) {
+  // 1. Safety: Keep it between 0 and 100
+  // percent = constrain(percent, 0, 100);
+
+  // 2. Map percentage to physical position
+  // map(value, 0, 100, OpenPos, ClosedPos)
+  int targetPos = map(percent, 0, 100, POS_0_PERCENT, POS_100_PERCENT);
+
+  // 3. Move the Servo
+  Serial.print("Command: ");
+  Serial.print(percent);
+  Serial.print("% -> Moving to Position: ");
+  Serial.println(targetPos);
+  
+  st.WritePosEx(6, targetPos, 1500, 50);
+}
+
+// ---------------------------------------------------------
+//  MQTT CALLBACK (This triggers when a message arrives)
+// ---------------------------------------------------------
+void callback(char* topic, byte* payload, unsigned int length) {
+  // 1. Increment the counter
+  messageCounter++;
+
+  Serial.println("-----------------------");
+  Serial.print("Message Count: ");
+  Serial.println(messageCounter);
+
+  // 2. CHECK: Is this an even number? (2, 4, 6, 8...)
+  // The % symbol means "remainder". If divided by 2 remainder is 0, it's even.
+  if (messageCounter % 2 == 0) {
+    Serial.println("-----------------------");
+    return; // STOP HERE! Do not run the code below.
+  }
+
+  // --- STANDARD PROCESSING (Only happens on 1, 3, 5...) ---
+  String message = "";
+  for (int i = 0; i < length; i++) {
+    message += (char)payload[i];
+  }
+  
+  Serial.print("MQTT Received: ");
+  Serial.println(message);
+
+  int percentValue = message.toInt();
+  moveClawToPercent(percentValue);
+  // 3. Flash LED to show activity
+  pixels.setPixelColor(0, pixels.Color(0, 0, 150)); // Blue
+  pixels.show();
+  delay(100);
+  pixels.clear();
+  pixels.show();
+  Serial.println("-----------------------");
+}
+
+void setup() {
+  // 1. Setup Serial (Computer)
+  Serial.begin(115200);
+  
+  // 2. Setup Serial1 (Servo Motors)
+  Serial1.begin(1000000, SERIAL_8N1, S_RXD, S_TXD);
+  st.pSerial = &Serial1;
+  
+  // 3. Setup LED
+  pixels.begin();
+  pixels.clear();
+  pixels.show();
+
+  // 4. Connect to WiFi
+  delay(1000);
+  Serial.println("\n=== Connecting to WiFi ===");
+  WiFi.begin(ssid, password);
+  
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\nWiFi Connected!");
+  
+  // 5. Setup MQTT
+  client.setServer(mqtt_server, 1883);
+  client.setCallback(callback);
+}
+
+void reconnect() {
+  while (!client.connected()) {
+    String clientId = "Arm_" + String(random(0xffff), HEX);
+    if (client.connect(clientId.c_str())) {
+      Serial.println("MQTT Connected!");
+      client.subscribe("robotic_arm/command"); // Listening Topic
+    } else {
+      Serial.print("failed, rc=");
+      Serial.print(client.state());
+      delay(1000);
+    }
+  }
+}
+
+void loop() {
+  if (!client.connected()) {
+    reconnect();
+  }
+  client.loop();
+}
