@@ -6,7 +6,7 @@ import math
 from mqtt_sender import send_coordinates
 
 # -----------------------------
-# CONFIG
+# CONFIG 
 # -----------------------------
 MODEL_PATH = "hand_landmarker.task"
 CAM_INDEX = 0
@@ -21,57 +21,125 @@ FINGERS = {
     "middle": ([9, 10, 11, 12], (0, 255, 255))   # Yellow
 }
 
-PALM_INDICES = [0]          # Wrist / palm base
-PALM_COLOR = (0, 0, 255)    # Red
-DOT_RADIUS = 7              # Bigger dots
+PALM_INDICES = [0]
+PALM_COLOR = (0, 0, 255)
+DOT_RADIUS = 7
 BONE_THICKNESS = 3
 
 # -----------------------------
-# HELPER FUNCTION: CALCULATE DISTANCE
+# HELPER: EUCLIDEAN DISTANCE
 # -----------------------------
 def calculate_distance(p1, p2):
-    """Calculate Euclidean distance between two points"""
     return math.sqrt((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2)
 
 # -----------------------------
-# HELPER FUNCTION: CALCULATE HAND OPENNESS
+# HAND OPENNESS % (thumb, index, middle)
+# 0% = fully closed, 100% = fully open
 # -----------------------------
-def calculate_hand_openness(points):
+def calculate_openness(hand_landmarks):
     """
-    Calculate how open the hand is (0% = fully open, 100% = fully closed)
-    Based on distances between the three fingertips
+    Uses extension ratios of thumb, index finger, and middle finger.
+    Each finger contributes equally to the final percentage.
     """
-    # Fingertip indices
-    thumb_tip = points[4]
-    index_tip = points[8]
-    middle_tip = points[12]
-    
-    # Calculate distances between each pair of fingertips
-    thumb_to_index = calculate_distance(thumb_tip, index_tip)
-    thumb_to_middle = calculate_distance(thumb_tip, middle_tip)
-    #index_to_middle = calculate_distance(index_tip, middle_tip)
-    
-    # Average distance between fingertips (took out the index_to_middle distane)
-    avg_distance = (thumb_to_index + thumb_to_middle) / 2
-    
-    # Normalize to percentage (these values may need calibration)
-    # Fully open hand: avg_distance ≈ 150-200 pixels (fingers spread apart)
-    # Fully closed hand: avg_distance ≈ 20-40 pixels (fingers together)
-    
-    # Define min/max distances (adjust based on your camera distance)
-    MAX_DISTANCE = 300  # Fully open
-    MIN_DISTANCE = 50   # Fully closed
-    
-    # Calculate percentage (inverted: small distance = high percentage)
-    if avg_distance >= MAX_DISTANCE:
-        percentage = 0
-    elif avg_distance <= MIN_DISTANCE:
-        percentage = 100
+    lm = hand_landmarks
+    wrist_x = lm[0].x
+
+    # Index: tip (8) above PIP (6) → extended
+    index_diff  = lm[6].y - lm[8].y
+    index_ratio = max(0.0, min(1.0, index_diff / 0.12))
+
+    # Middle: tip (12) above PIP (10) → extended
+    middle_diff  = lm[10].y - lm[12].y
+    middle_ratio = max(0.0, min(1.0, middle_diff / 0.12))
+
+    # Thumb: tip (4) further from wrist x than base (2) → extended
+    thumb_diff  = abs(lm[4].x - wrist_x) - abs(lm[2].x - wrist_x)
+    thumb_ratio = max(0.0, min(1.0, thumb_diff / 0.08))
+
+    return int((index_ratio + middle_ratio + thumb_ratio) / 3 * 100)
+
+# -----------------------------
+# PALM FACING DIRECTION
+# 100% = fully facing camera (palm toward you)
+#   0% = fully facing away  (back of hand toward you)
+#
+# Method: cross product of two palm vectors gives the palm normal.
+# The z-component tells us which way the palm is pointing.
+# -----------------------------
+def calculate_palm_facing(hand_landmarks):
+    """
+    Returns:
+      direction (str)  — "FACING CAMERA", "FACING AWAY", or "SIDE-ON"
+      facing_pct (int) — 100% = palm toward camera, 0% = back of hand toward camera
+    """
+    lm = hand_landmarks
+
+    # V1: wrist (0) → index MCP (5)
+    # V2: wrist (0) → pinky MCP (17)
+    v1x = lm[5].x - lm[0].x
+    v1y = lm[5].y - lm[0].y
+    v1z = lm[5].z - lm[0].z
+
+    v2x = lm[17].x - lm[0].x
+    v2y = lm[17].y - lm[0].y
+    v2z = lm[17].z - lm[0].z
+
+    # Cross product → palm normal vector
+    nx = v1y * v2z - v1z * v2y
+    ny = v1z * v2x - v1x * v2z
+    nz = v1x * v2y - v1y * v2x
+
+    magnitude = math.sqrt(nx**2 + ny**2 + nz**2)
+    if magnitude == 0:
+        return "SIDE-ON", 50
+
+    nz_norm = nz / magnitude  # -1.0 to +1.0
+
+    # +1 → palm facing camera (0%), -1 → back of hand (100%)
+    facing_pct = int((1 - (nz_norm + 1) / 2) * 100)
+
+    if facing_pct <= 40:
+        direction = "FACING AWAY"
+    elif facing_pct >= 60:
+        direction = "FACING CAMERA"
     else:
-        # Linear interpolation
-        percentage = 100 - ((avg_distance - MIN_DISTANCE) / (MAX_DISTANCE - MIN_DISTANCE) * 100)
-    
-    return int(max(0, min(100, percentage)))  # Clamp between 0-100
+        direction = "SIDE-ON"
+
+    return direction, facing_pct
+
+# -----------------------------
+# DRAW HUD BOX (top-left)
+# -----------------------------
+def draw_hud(frame, openness_pct, direction, facing_pct, coord_x, coord_y, arm_reach):
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    padding = 14
+    line_gap = 10
+    box_x, box_y = 12, 12
+
+    palm_color = (0, 255, 120) if direction == "FACING CAMERA" else \
+                 (80, 80, 220) if direction == "FACING AWAY" else \
+                 (200, 200, 200)
+
+    lines = [
+        (f"Openness:   {openness_pct}%",   (0, 220, 255)),
+        (f"Palm:       {direction}",         palm_color),
+        (f"Facing:     {facing_pct}%",      (0, 220, 255)),
+        (f"Wrist X:    {coord_x}",          (255, 255, 255)),
+        (f"Wrist Y:    {coord_y}",          (255, 255, 255)),
+        (f"Front/Back: {arm_reach}",        (0, 255, 255)),
+    ]
+
+    line_sizes = [cv2.getTextSize(text, font, 0.85, 2) for text, _ in lines]
+    box_w = max(sz[0][0] for sz in line_sizes) + padding * 2
+    box_h = sum(sz[0][1] + line_gap for sz in line_sizes) + padding * 2
+
+    cv2.rectangle(frame, (box_x, box_y), (box_x + box_w, box_y + box_h), (80, 80, 80), 1)
+
+    cursor_y = box_y + padding
+    for (text, color), (size, baseline) in zip(lines, line_sizes):
+        cursor_y += size[1]
+        cv2.putText(frame, text, (box_x + padding, cursor_y), font, 0.85, color, 2, cv2.LINE_AA)
+        cursor_y += line_gap
 
 # -----------------------------
 # CAMERA
@@ -91,7 +159,7 @@ RunningMode = vision.RunningMode
 options = HandLandmarkerOptions(
     base_options=BaseOptions(model_asset_path=MODEL_PATH),
     running_mode=RunningMode.VIDEO,
-    num_hands=1  # Track only one hand
+    num_hands=1
 )
 
 landmarker = HandLandmarker.create_from_options(options)
@@ -106,118 +174,75 @@ while True:
     if not ret:
         break
 
+    frame_h, frame_w = frame.shape[:2]
     frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
-    mp_image = mp.Image(
-        image_format=mp.ImageFormat.SRGB,
-        data=frame_rgb
-    )
+    mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=frame_rgb)
 
-    timestamp_ms += 33 # ~30 FPS
+    timestamp_ms += 33  # ~30 FPS
     result = landmarker.detect_for_video(mp_image, timestamp_ms)
 
-    # -----------------------------
-    # DRAW LANDMARKS & CALCULATE OPENNESS
-    # -----------------------------
     if result.hand_landmarks:
-        # Only process the first hand (since num_hands=1)
         hand_landmarks = result.hand_landmarks[0]
         points = []
 
-        # Convert normalized landmarks → pixel coords
         for lm in hand_landmarks:
-            x = int(lm.x * frame.shape[1])
-            y = int(lm.y * frame.shape[0])
+            x = int(lm.x * frame_w)
+            y = int(lm.y * frame_h)
             points.append((x, y))
 
-# --- ARM MOVEMENT LOGIC ---
-        
-        # 1. POSITIONAL MOVEMENT (Up/Down, Left/Right)
-        # Your original logic: wrist is the anchor
-        palm_x = points[0][0]
-        palm_y = points[0][1]
-        frame_height, frame_width = frame.shape[:2]
-        coord_x = palm_x
-        coord_y = frame_height - palm_y # Inverted so bottom is 0
+        # --- Calculations ---
+        openness_pct          = calculate_openness(hand_landmarks)
+        direction, facing_pct = calculate_palm_facing(hand_landmarks)
 
-        # 2. REACH MOVEMENT (Forward/Backward)
-        # We measure the distance from Wrist (0) to Middle Finger Base (9)
-        # As the arm extends toward the camera, this "arm_reach" value increases.
+        # Wrist position (bottom-left origin)
+        coord_x   = points[0][0]
+        coord_y   = frame_h - points[0][1]
+
+        # Arm reach: wrist (0) → middle finger base (9)
         arm_reach = int(calculate_distance(points[0], points[9]))
 
-        # Calculate hand openness percentage
-        openness_percentage = calculate_hand_openness(points)
-        
-        # Draw palm (red)
+        # --- Draw palm dot ---
         for idx in PALM_INDICES:
             cv2.circle(frame, points[idx], DOT_RADIUS, PALM_COLOR, -1)
 
-        # Draw fingers
+        # --- Draw fingers ---
         for indices, color in FINGERS.values():
-            # Draw joints
             for idx in indices:
                 cv2.circle(frame, points[idx], DOT_RADIUS, color, -1)
-
-            # Draw bones (connected to wrist)
             prev = 0
             for idx in indices:
                 cv2.line(frame, points[prev], points[idx], color, BONE_THICKNESS)
                 prev = idx
-        
-        cv2.putText(frame, f"Wrist Y: {coord_y}", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-        cv2.putText(frame, f"Wrist X: {coord_x}", (50,90), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-        cv2.putText(frame, f"Front/Back: {arm_reach}", (50, 130), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
 
-        # Display percentage on screen
-        # Position text near the wrist
-        text_position = (points[0][0] - 50, points[0][1] - 30)
-        
-        # Draw background rectangle for better readability
-        text = f"{openness_percentage}%"
+        # --- Openness % near wrist ---
         font = cv2.FONT_HERSHEY_SIMPLEX
-        font_scale = 1.2
-        font_thickness = 3
-        
-        # Get text size for background
-        (text_width, text_height), baseline = cv2.getTextSize(text, font, font_scale, font_thickness)
-        
-        # Draw background rectangle
-        cv2.rectangle(frame, 
-                     (text_position[0] - 10, text_position[1] - text_height - 10),
-                     (text_position[0] + text_width + 10, text_position[1] + baseline + 10),
-                     (0, 0, 0), -1)
+        text_pos = (points[0][0] - 50, points[0][1] - 30)
+        grip_text = f"{openness_pct}%"
+        (tw, th), bl = cv2.getTextSize(grip_text, font, 1.2, 3)
+        cv2.rectangle(frame,
+                      (text_pos[0] - 10, text_pos[1] - th - 10),
+                      (text_pos[0] + tw + 10, text_pos[1] + bl + 10),
+                      (0, 0, 0), -1)
+        cv2.putText(frame, grip_text, text_pos, font, 1.2, (255, 255, 255), 3, cv2.LINE_AA)
 
-        # Draw text
-        cv2.putText(frame, text, text_position, font, font_scale, 
-                   (255, 255, 255), font_thickness, cv2.LINE_AA)
-        
-        # Optional: Display status text
-        status = "CLOSED" if openness_percentage > 90 else "OPEN" if openness_percentage < 30 else "PARTIAL"
-        status_position = (text_position[0], text_position[1] + 40)
-        cv2.putText(frame, status, status_position, font, 0.6, 
-                   (255, 255, 255), 2, cv2.LINE_AA)
+        status = "CLOSED" if openness_pct > 90 else "OPEN" if openness_pct < 30 else "PARTIAL"
+        cv2.putText(frame, status, (text_pos[0], text_pos[1] + 40),
+                    font, 0.6, (255, 255, 255), 2, cv2.LINE_AA)
 
-        # Calculate palm center coordinates (wrist is point 0)
-        palm_x = points[0][0]
-        palm_y = points[0][1]
-        
-        # Convert to bottom-left origin (0,0)
-        # Bottom-left means: x increases rightward, y increases upward
-        frame_height, frame_width = frame.shape[:2]
-        coord_x = palm_x
-        coord_y = frame_height - palm_y
-        
-        # Display coordinates in bottom-right corner of screen
-        coord_text = f"Hand: ({coord_x}, {coord_y})"
-        coord_position = (frame_width - 300, frame_height - 20)
-        cv2.putText(frame, coord_text, coord_position, font, 0.7, 
-                   (0, 255, 255), 2, cv2.LINE_AA)
-        
-        # Send coordinates via MQTT with a lag of 5 frames
+        # --- HUD (top-left) ---
+        draw_hud(frame, openness_pct, direction, facing_pct, coord_x, coord_y, arm_reach)
+
+        # --- Coordinates (bottom-right) ---
+        cv2.putText(frame, f"Hand: ({coord_x}, {coord_y})",
+                    (frame_w - 300, frame_h - 20),
+                    font, 0.7, (0, 255, 255), 2, cv2.LINE_AA)
+
+        # --- MQTT ---
         if timestamp_ms % 5 == 0:
-            send_coordinates(coord_x, coord_y, openness_percentage)
+            send_coordinates(coord_x, coord_y, openness_pct)
 
-    cv2.imshow("MediaPipe Tasks – Hand Tracking", frame)
+    cv2.imshow("MediaPipe Tasks - Hand Tracking", frame)
 
     if cv2.waitKey(1) & 0xFF == ord("q"):
         break
