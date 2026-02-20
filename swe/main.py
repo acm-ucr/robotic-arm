@@ -6,7 +6,7 @@ import math
 from mqtt_sender import send_coordinates
 
 # -----------------------------
-# CONFIG
+# CONFIG 
 # -----------------------------
 MODEL_PATH = "hand_landmarker.task"
 CAM_INDEX = 0
