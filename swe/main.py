@@ -130,6 +130,21 @@ while True:
             y = int(lm.y * frame.shape[0])
             points.append((x, y))
 
+# --- ARM MOVEMENT LOGIC ---
+        
+        # 1. POSITIONAL MOVEMENT (Up/Down, Left/Right)
+        # Your original logic: wrist is the anchor
+        palm_x = points[0][0]
+        palm_y = points[0][1]
+        frame_height, frame_width = frame.shape[:2]
+        coord_x = palm_x
+        coord_y = frame_height - palm_y # Inverted so bottom is 0
+
+        # 2. REACH MOVEMENT (Forward/Backward)
+        # We measure the distance from Wrist (0) to Middle Finger Base (9)
+        # As the arm extends toward the camera, this "arm_reach" value increases.
+        arm_reach = int(calculate_distance(points[0], points[9]))
+
         # Calculate hand openness percentage
         openness_percentage = calculate_hand_openness(points)
         
@@ -149,6 +164,10 @@ while True:
                 cv2.line(frame, points[prev], points[idx], color, BONE_THICKNESS)
                 prev = idx
         
+        cv2.putText(frame, f"Wrist Y: {coord_y}", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+        cv2.putText(frame, f"Wrist X: {coord_x}", (50,90), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+        cv2.putText(frame, f"Front/Back: {arm_reach}", (50, 130), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
+
         # Display percentage on screen
         # Position text near the wrist
         text_position = (points[0][0] - 50, points[0][1] - 30)
@@ -167,7 +186,7 @@ while True:
                      (text_position[0] - 10, text_position[1] - text_height - 10),
                      (text_position[0] + text_width + 10, text_position[1] + baseline + 10),
                      (0, 0, 0), -1)
-        
+
         # Draw text
         cv2.putText(frame, text, text_position, font, font_scale, 
                    (255, 255, 255), font_thickness, cv2.LINE_AA)
