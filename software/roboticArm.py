@@ -23,6 +23,19 @@ HAND_CONNECTIONS = [
     (0,4),(0,8),(0,12),(4,8),(8,12),(4,12)   # Pinky
 ]
 
+# Global variables for dynamic Z scaling Revission 3
+min_scale = None
+max_scale = None
+min_inv_scale = None
+max_inv_scale = None
+
+def compute_hand_scale(hand_landmarks):
+    points = [(lm.x, lm.y) for lm in hand_landmarks]
+    wrist = points[0]
+    fingertips = [points[4], points[8], points[12], points[16], points[20]]
+    distances = [((x - wrist[0])**2 + (y - wrist[1])**2)**0.5 for x, y in fingertips]
+    return max(distances) if distances else 0
+
 # A global variable to store the latest results asynchronously
 latest_result = None
 
@@ -96,13 +109,32 @@ with HandLandmarker.create_from_options(options) as landmarker:
                     y = int(landmark.y * h)
                     cv2.circle(frame, (x, y), 4, (0, 0, 255), -1)
                 
-                # Output information RoboticArm.py change 2
+                # Compute Z value based on hand scale Revision 3
+                scale = compute_hand_scale(hand_landmarks)
+                inv_scale = 1.0 / scale if scale > 0 else 0
+
+                if min_scale is None or scale < min_scale:
+                    min_scale = scale
+                if max_scale is None or scale > max_scale:
+                    max_scale = scale
+                if min_inv_scale is None or inv_scale < min_inv_scale:
+                    min_inv_scale = inv_scale
+                if max_inv_scale is None or inv_scale > max_inv_scale:
+                    max_inv_scale = inv_scale
+
+                z_value = 0.5
+                if max_inv_scale is not None and min_inv_scale is not None and max_inv_scale > min_inv_scale:
+                    z_value = 1 - (inv_scale - min_inv_scale) / (max_inv_scale - min_inv_scale)
+                z_value = max(0, min(1, z_value))
+                
+                # Output information RoboticArm.py Revision 2
                 print(f"Number of lines: {len(HAND_CONNECTIONS)}")
                 for idx in [0, 4, 8, 12]:
                     landmark = hand_landmarks[idx]
                     x = int(landmark.x * w)
                     y = int(landmark.y * h)
                     print(f"Point {idx}: ({x}, {y})")
+                print(f"Z value: {z_value:.3f}")
         
         # Show the frame to the user
         cv2.imshow('MediaPipe Hand Landmarker (Live Stream)', frame)
