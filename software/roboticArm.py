@@ -10,13 +10,17 @@ HandLandmarkerOptions = mp.tasks.vision.HandLandmarkerOptions
 HandLandmarkerResult = mp.tasks.vision.HandLandmarkerResult
 VisionRunningMode = mp.tasks.vision.RunningMode
 
-# Hand connection pairs for drawing (21 keypoints)
+# # Hand connection pairs for drawing (21 keypoints)
+# HAND_CONNECTIONS = [
+#     (0,1), (1, 2), (2, 3), (3, 4),           # Thumb
+#     (0, 5), (5, 6), (6, 7), (7, 8),           # Index
+#     (0, 9), (9, 10), (10, 11), (11, 12),      # Middle
+#     (0, 13), (13, 14), (14, 15), (15, 16),    # Ring
+#     (0, 17), (17, 18), (18, 19), (19, 20)     # Pinky
+# ]
+
 HAND_CONNECTIONS = [
-    (0, 1), (1, 2), (2, 3), (3, 4),           # Thumb
-    (0, 5), (5, 6), (6, 7), (7, 8),           # Index
-    (0, 9), (9, 10), (10, 11), (11, 12),      # Middle
-    (0, 13), (13, 14), (14, 15), (15, 16),    # Ring
-    (0, 17), (17, 18), (18, 19), (19, 20)     # Pinky
+    (0,4),(0,8),(0,12),(4,8),(8,12),(4,12)   # Pinky
 ]
 
 # A global variable to store the latest results asynchronously
@@ -33,7 +37,7 @@ def handle_result(result, output_image: mp.Image, timestamp_ms: int):
 options = HandLandmarkerOptions(
     base_options=BaseOptions(model_asset_path='hand_landmarker.task'), # Ensure this matches your downloaded model file name
     running_mode=VisionRunningMode.LIVE_STREAM,
-    num_hands=2, # You can change this to detect more hands
+    num_hands=1, # You can change this to detect more hands
     result_callback=handle_result)
 
 # --- Start the Webcam Loop ---
@@ -91,6 +95,14 @@ with HandLandmarker.create_from_options(options) as landmarker:
                     x = int(landmark.x * w)
                     y = int(landmark.y * h)
                     cv2.circle(frame, (x, y), 4, (0, 0, 255), -1)
+                
+                # Output information RoboticArm.py change 2
+                print(f"Number of lines: {len(HAND_CONNECTIONS)}")
+                for idx in [0, 4, 8, 12]:
+                    landmark = hand_landmarks[idx]
+                    x = int(landmark.x * w)
+                    y = int(landmark.y * h)
+                    print(f"Point {idx}: ({x}, {y})")
         
         # Show the frame to the user
         cv2.imshow('MediaPipe Hand Landmarker (Live Stream)', frame)
