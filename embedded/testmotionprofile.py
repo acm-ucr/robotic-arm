@@ -3,12 +3,16 @@
 import time
 import serial
 import math
+import os
+from dotenv import load_dotenv
+load_dotenv()
+
 # If you have a specific external file you want to use, uncomment the line below:
 # from interpolate import generate_profile 
 
 # ====== CONFIG ======
 # change to your port name and check device manager if unsure
-PORT = "/dev/ttyACM0"  
+PORT = os.getenv("SERIAL_PORT")
 BAUDRATE = 1000000
 SERVO_IDS = [1, 2, 3, 4, 5, 6]
 MOVE_TIME = 200  # Default fallback for raw writes
