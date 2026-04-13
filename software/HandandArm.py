@@ -18,11 +18,8 @@ HAND_CONNECTIONS = [
     (0,17),(17,18),(18,19),(19,20)
 ]
 
-POSE_CONNECTIONS = [
-    (11, 12),
-    (11, 13), (13, 15),  # Left arm
-    (12, 14), (14, 16),  # Right arm
-]
+LEFT_ARM_CONNECTIONS  = [(11, 13), (13, 15)]
+RIGHT_ARM_CONNECTIONS = [(12, 14), (14, 16)]
 
 latest_hand_result = None
 latest_pose_result = None
@@ -34,6 +31,26 @@ def handle_hand_result(result, output_image: mp.Image, timestamp_ms: int):
 def handle_pose_result(result, output_image: mp.Image, timestamp_ms: int):
     global latest_pose_result
     latest_pose_result = result
+
+def pick_one_hand(hand_result):
+    if not hand_result or not hand_result.hand_landmarks:
+        return None, None
+    if len(hand_result.hand_landmarks) == 1:
+        return hand_result.hand_landmarks[0], hand_result.handedness[0][0]
+    handedness_scores = [
+        hand_result.handedness[i][0].score
+        for i in range(len(hand_result.handedness))
+    ]
+    best_index = handedness_scores.index(max(handedness_scores))
+    return hand_result.hand_landmarks[best_index], hand_result.handedness[best_index][0]
+
+def pick_one_arm(pose_landmarks, selected_handedness):
+    if selected_handedness is None:
+        return RIGHT_ARM_CONNECTIONS, [12, 14, 16]
+    if selected_handedness.display_name == 'Left':
+        return LEFT_ARM_CONNECTIONS, [11, 13, 15]
+    else:
+        return RIGHT_ARM_CONNECTIONS, [12, 14, 16]
 
 hand_options = HandLandmarkerOptions(
     base_options=BaseOptions(model_asset_path='hand_landmarker.task'),
@@ -68,44 +85,52 @@ with HandLandmarker.create_from_options(hand_options) as hand_landmarker, \
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
         timestamp_ms = int(time.time() * 1000)
 
-        # Send the same frame to both landmarkers
         hand_landmarker.detect_async(mp_image, timestamp_ms)
         pose_landmarker.detect_async(mp_image, timestamp_ms)
 
         h, w, _ = frame.shape
 
-        # --- Draw Pose (arms/shoulders) ---
+        selected_hand, selected_handedness = pick_one_hand(latest_hand_result)
+
+        # --- Draw Pose (one arm only, no shoulder bar) ---
         if latest_pose_result and latest_pose_result.pose_landmarks:
             for pose_landmarks in latest_pose_result.pose_landmarks:
-                for start_idx, end_idx in POSE_CONNECTIONS:
+                arm_connections, arm_indices = pick_one_arm(pose_landmarks, selected_handedness)
+
+                for start_idx, end_idx in arm_connections:
                     start = pose_landmarks[start_idx]
                     end = pose_landmarks[end_idx]
                     if start.visibility < 0.5 or end.visibility < 0.5:
                         continue
                     x1, y1 = int(start.x * w), int(start.y * h)
                     x2, y2 = int(end.x * w), int(end.y * h)
-                    cv2.line(frame, (x1, y1), (x2, y2), (255, 255, 0), 3)  # Yellow lines
+                    cv2.line(frame, (x1, y1), (x2, y2), (255, 255, 0), 3)
 
-                for idx in set(i for pair in POSE_CONNECTIONS for i in pair):
+                for idx in arm_indices:
                     lm = pose_landmarks[idx]
                     if lm.visibility < 0.5:
                         continue
                     x, y = int(lm.x * w), int(lm.y * h)
-                    cv2.circle(frame, (x, y), 7, (255, 200, 0), -1)  # Yellow dots
+                    cv2.circle(frame, (x, y), 7, (255, 200, 0), -1)
 
-        # --- Draw Hands (fingers) ---
-        if latest_hand_result and latest_hand_result.hand_landmarks:
-            for hand_landmarks in latest_hand_result.hand_landmarks:
-                for start_idx, end_idx in HAND_CONNECTIONS:
-                    start = hand_landmarks[start_idx]
-                    end = hand_landmarks[end_idx]
-                    x1, y1 = int(start.x * w), int(start.y * h)
-                    x2, y2 = int(end.x * w), int(end.y * h)
-                    cv2.line(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)  # Green lines
+        # --- Draw one Hand only ---
+        if selected_hand:
+            for start_idx, end_idx in HAND_CONNECTIONS:
+                start = selected_hand[start_idx]
+                end = selected_hand[end_idx]
+                x1, y1 = int(start.x * w), int(start.y * h)
+                x2, y2 = int(end.x * w), int(end.y * h)
+                cv2.line(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
 
-                for landmark in hand_landmarks:
-                    x, y = int(landmark.x * w), int(landmark.y * h)
-                    cv2.circle(frame, (x, y), 4, (0, 0, 255), -1)  # Red dots
+            for landmark in selected_hand:
+                x, y = int(landmark.x * w), int(landmark.y * h)
+                cv2.circle(frame, (x, y), 4, (0, 0, 255), -1)
+
+            wrist = selected_hand[0]
+            wx, wy = int(wrist.x * w), int(wrist.y * h)
+            cv2.putText(frame, f'Controlling: {selected_handedness.display_name}',
+                        (wx - 30, wy - 15),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
         cv2.imshow('Hand + Pose Tracking', frame)
 
