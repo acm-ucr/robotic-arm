@@ -6,12 +6,12 @@ import paho.mqtt.client as mqtt
 import json
 
 # --- MQTT Setup (add near the top, after your imports) ---
-BROKER   = "empx"   # change to broker IP if on another machine
+BROKER   = "127.0.0.1"   # change to broker IP if on another machine | empx
 PORT     = 1883
 TOPIC_PUB = "arm/servos"      # topic your script publishes angles to
 TOPIC_SUB = "arm/feedback"    # optional: topic the arm sends status back on
 
-mqtt_client = mqtt.Client()
+mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
 
 def on_connect(client, userdata, flags, rc):
     print(f"MQTT connected (rc={rc})")
@@ -179,3 +179,5 @@ with HandLandmarker.create_from_options(options) as landmarker:
     # Clean up
     cap.release()
     cv2.destroyAllWindows()
+
+    # & "C:\Program Files\mosquitto\mosquitto_sub.exe" -t "arm/servos" -v
