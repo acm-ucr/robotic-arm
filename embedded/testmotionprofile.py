@@ -19,8 +19,8 @@ serial_lock = threading.Lock()
 PORT = os.getenv("SERIAL_PORT")
 BAUDRATE = 1000000
 SERVO_IDS = [1, 2, 3, 4, 5, 6]
-TARGET_MAX_POSITIONS = [3000, 3000, 1000, 1000, 1900, 3300]
-TARGET_MIN_POSITIONS = [1000, 1000, 3000, 3000, 900, 1900]
+TARGET_MAX_POSITIONS = [3000, 3000, 1000, 1000, 3800, 3300]
+TARGET_MIN_POSITIONS = [1000, 1000, 3000, 3000, 1500, 1900]
 MOVE_TIME = 200  # Default fallback for raw writes
 # Expected camera ranges
 CAM_X_MIN, CAM_X_MAX = 0.0, 1.0
@@ -88,6 +88,13 @@ def read_all_positions():
         time.sleep(0.02)  # small delay so servos don't collide on serial
     return positions
 
+def default_pos():
+    move_claw = {5: TARGET_MIN_POSITIONS[4], 6:TARGET_MIN_POSITIONS[5]}
+    move_arm = {1: TARGET_MIN_POSITIONS[0], 2: TARGET_MIN_POSITIONS[1], 3: TARGET_MIN_POSITIONS[2], 4: 2000}
+    move_wrist = {4: TARGET_MIN_POSITIONS[3]}
+    execute_synchronized_group_move(move_claw, 1)
+    execute_synchronized_group_move(move_arm, 1)
+    execute_synchronized_group_move(move_wrist, 1)
 
 # ==========================================
 # ====== MOTION PROFILING / INTERPOLATION ======
@@ -150,12 +157,14 @@ def execute_profiled_move_background(servo_id, target_pos, duration_sec=1.0, ste
     )
     thread.start()
     return thread
-def execute_synchronized_group_move(targets_dict, duration_sec=1.0, steps=20, profile_type="ease"):
+
+def execute_synchronized_group_move(targets_dict, duration_sec=1.0, profile_type="ease"):
     """
     Moves multiple servos in perfect synchronization without threading jitter.
     Pass in a dictionary: {servo_id: target_position}
     Example: execute_synchronized_group_move({1: 2048, 2: 1024, 3: 4000}, duration_sec=2.0)
     """
+    steps = duration_sec * 100
     starting_positions = {}
     waypoints_dict = {}
 
@@ -191,4 +200,10 @@ def execute_synchronized_group_move(targets_dict, duration_sec=1.0, steps=20, pr
 # item2= {4: 2000, 6:1000}
 
 # execute_synchronized_group_move(item1)
+# default_pos()
+test = {1: 2000, 2: 2000, 3: 2000, 4: 2000, 5: 1000, 6: 1000}
+execute_synchronized_group_move(test, 2)
+time.sleep(1)
+default_pos()
+
 
