@@ -132,15 +132,6 @@ with HandLandmarker.create_from_options(options) as landmarker:
                     y = int(landmark.y * h)
                     cv2.circle(frame, (x, y), 4, (0, 0, 255), -1)
 
-                # publish wrist position as a simple test payload
-                wrist = hand_landmarks[0]
-                payload = json.dumps({
-                    "wrist_x": round(wrist.x, 3),
-                    "wrist_y": round(wrist.y, 3),
-                })
-
-                mqtt_client.publish(TOPIC_PUB, payload)
-                
                 # Compute Z value based on hand scale Revision 3
                 scale = compute_hand_scale(hand_landmarks)
                 inv_scale = 1.0 / scale if scale > 0 else 0
@@ -154,6 +145,16 @@ with HandLandmarker.create_from_options(options) as landmarker:
                 if max_inv_scale > min_inv_scale:
                     z_value = 1 - (inv_scale - min_inv_scale) / (max_inv_scale - min_inv_scale)
                 z_value = max(0, min(1, z_value))
+
+                # publish wrist position as a simple test payload
+                wrist = hand_landmarks[0]
+                payload = json.dumps({
+                    "wrist_x": round(wrist.x, 3),
+                    "wrist_y": round(wrist.y, 3),
+                    "z": round(z_value, 3),
+                })
+
+                mqtt_client.publish(TOPIC_PUB, payload)
                 
                 # Output information RoboticArm.py Revision 2
                 print(f"Number of lines: {len(HAND_CONNECTIONS)}")
