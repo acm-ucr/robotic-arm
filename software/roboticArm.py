@@ -33,14 +33,31 @@ HandLandmarkerOptions = mp.tasks.vision.HandLandmarkerOptions
 HandLandmarkerResult = mp.tasks.vision.HandLandmarkerResult
 VisionRunningMode = mp.tasks.vision.RunningMode
 
-# Hand connection pairs for drawing (21 keypoints)
+# # Hand connection pairs for drawing (21 keypoints)
+# HAND_CONNECTIONS = [
+#     (0,1), (1, 2), (2, 3), (3, 4),           # Thumb
+#     (0, 5), (5, 6), (6, 7), (7, 8),           # Index
+#     (0, 9), (9, 10), (10, 11), (11, 12),      # Middle
+#     (0, 13), (13, 14), (14, 15), (15, 16),    # Ring
+#     (0, 17), (17, 18), (18, 19), (19, 20)     # Pinky
+# ]
+
 HAND_CONNECTIONS = [
-    (0, 1), (1, 2), (2, 3), (3, 4),           # Thumb
-    (0, 5), (5, 6), (6, 7), (7, 8),           # Index
-    (0, 9), (9, 10), (10, 11), (11, 12),      # Middle
-    (0, 13), (13, 14), (14, 15), (15, 16),    # Ring
-    (0, 17), (17, 18), (18, 19), (19, 20)     # Pinky
+    (0,4),(0,8),(0,12),(4,8),(8,12),(4,12)   # Pinky
 ]
+
+# Global variables for dynamic Z scaling Revission 3
+min_scale = None
+max_scale = None
+min_inv_scale = 9  # Fixed bound
+max_inv_scale = 16  # Fixed bound
+
+def compute_hand_scale(hand_landmarks):
+    p0 = hand_landmarks[0]
+    p1 = hand_landmarks[1]
+    dx = p0.x - p1.x
+    dy = p0.y - p1.y
+    return (dx**2 + dy**2)**0.5
 
 # A global variable to store the latest results asynchronously
 latest_result = None
@@ -56,7 +73,7 @@ def handle_result(result, output_image: mp.Image, timestamp_ms: int):
 options = HandLandmarkerOptions(
     base_options=BaseOptions(model_asset_path='robotic-arm/hand_landmarker.task'), # Ensure this matches your downloaded model file name
     running_mode=VisionRunningMode.LIVE_STREAM,
-    num_hands=2, # You can change this to detect more hands
+    num_hands=1, # You can change this to detect more hands
     result_callback=handle_result)
 
 # --- Start the Webcam Loop ---
@@ -123,6 +140,30 @@ with HandLandmarker.create_from_options(options) as landmarker:
                 })
 
                 mqtt_client.publish(TOPIC_PUB, payload)
+                
+                # Compute Z value based on hand scale Revision 3
+                scale = compute_hand_scale(hand_landmarks)
+                inv_scale = 1.0 / scale if scale > 0 else 0
+
+                if min_scale is None or scale < min_scale:
+                    min_scale = scale
+                if max_scale is None or scale > max_scale:
+                    max_scale = scale
+
+                z_value = 0.5
+                if max_inv_scale > min_inv_scale:
+                    z_value = 1 - (inv_scale - min_inv_scale) / (max_inv_scale - min_inv_scale)
+                z_value = max(0, min(1, z_value))
+                
+                # Output information RoboticArm.py Revision 2
+                print(f"Number of lines: {len(HAND_CONNECTIONS)}")
+                for idx in [0, 4, 8, 12]:
+                    landmark = hand_landmarks[idx]
+                    x = int(landmark.x * w)
+                    y = int(landmark.y * h)
+                    print(f"Point {idx}: ({x}, {y})")
+                print(f"Scale: {scale:.4f}, Inv Scale: {inv_scale:.4f}")
+                print(f"Z value: {z_value:.3f}")
         
         # Show the frame to the user
         cv2.imshow('MediaPipe Hand Landmarker (Live Stream)', frame)
