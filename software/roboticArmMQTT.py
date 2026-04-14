@@ -6,7 +6,7 @@ import paho.mqtt.client as mqtt
 import json
 
 # --- MQTT Setup (add near the top, after your imports) ---
-BROKER   = "localhost"   # change to broker IP if on another machine
+BROKER   = "empx"   # change to broker IP if on another machine
 PORT     = 1883
 TOPIC_PUB = "arm/servos"      # topic your script publishes angles to
 TOPIC_SUB = "arm/feedback"    # optional: topic the arm sends status back on
