@@ -2,6 +2,7 @@ from __future__ import annotations
 import cv2
 import mediapipe as mp
 import time
+import json
 
 # --- Setup MediaPipe Tasks and Options ---
 BaseOptions = mp.tasks.BaseOptions
@@ -48,7 +49,7 @@ def handle_result(result, output_image: mp.Image, timestamp_ms: int):
 
 # --- Configure the Hand Landmarker ---
 options = HandLandmarkerOptions(
-    base_options=BaseOptions(model_asset_path='hand_landmarker.task'), # Ensure this matches your downloaded model file name
+    base_options=BaseOptions(model_asset_path='robotic-arm/hand_landmarker.task'), # Ensure this matches your downloaded model file name
     running_mode=VisionRunningMode.LIVE_STREAM,
     num_hands=1, # You can change this to detect more hands
     result_callback=handle_result)
@@ -137,7 +138,6 @@ with HandLandmarker.create_from_options(options) as landmarker:
                 print(f"Scale: {scale:.4f}, Inv Scale: {inv_scale:.4f}")
                 print(f"Z value: {z_value:.3f}")
                 # MQTT output
-                import json
                 mqtt_data = {"x": hand_center_x, "y": hand_center_y, "z": z_value}
                 print(json.dumps(mqtt_data))
         
