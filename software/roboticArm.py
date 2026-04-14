@@ -2,6 +2,29 @@ from __future__ import annotations
 import cv2
 import mediapipe as mp
 import time
+import paho.mqtt.client as mqtt
+import json
+
+# --- MQTT Setup (add near the top, after your imports) ---
+BROKER   = "localhost"   # change to broker IP if on another machine
+PORT     = 1883
+TOPIC_PUB = "arm/servos"      # topic your script publishes angles to
+TOPIC_SUB = "arm/feedback"    # optional: topic the arm sends status back on
+
+mqtt_client = mqtt.Client()
+
+def on_connect(client, userdata, flags, rc):
+    print(f"MQTT connected (rc={rc})")
+    client.subscribe(TOPIC_SUB)   # listen for feedback from the arm
+
+def on_message(client, userdata, msg):
+    # Handles messages coming BACK from the arm (e.g. sensor readings)
+    print(f"Arm feedback: {msg.payload.decode()}")
+
+mqtt_client.on_connect = on_connect
+mqtt_client.on_message = on_message
+mqtt_client.connect(BROKER, PORT)
+mqtt_client.loop_start()   # runs MQTT in a background thread
 
 # --- Setup MediaPipe Tasks and Options ---
 BaseOptions = mp.tasks.BaseOptions
@@ -31,7 +54,7 @@ def handle_result(result, output_image: mp.Image, timestamp_ms: int):
 
 # --- Configure the Hand Landmarker ---
 options = HandLandmarkerOptions(
-    base_options=BaseOptions(model_asset_path='hand_landmarker.task'), # Ensure this matches your downloaded model file name
+    base_options=BaseOptions(model_asset_path='robotic-arm/hand_landmarker.task'), # Ensure this matches your downloaded model file name
     running_mode=VisionRunningMode.LIVE_STREAM,
     num_hands=2, # You can change this to detect more hands
     result_callback=handle_result)
@@ -91,6 +114,15 @@ with HandLandmarker.create_from_options(options) as landmarker:
                     x = int(landmark.x * w)
                     y = int(landmark.y * h)
                     cv2.circle(frame, (x, y), 4, (0, 0, 255), -1)
+
+                # publish wrist position as a simple test payload
+                wrist = hand_landmarks[0]
+                payload = json.dumps({
+                    "wrist_x": round(wrist.x, 3),
+                    "wrist_y": round(wrist.y, 3),
+                })
+
+                mqtt_client.publish(TOPIC_PUB, payload)
         
         # Show the frame to the user
         cv2.imshow('MediaPipe Hand Landmarker (Live Stream)', frame)
@@ -98,6 +130,9 @@ with HandLandmarker.create_from_options(options) as landmarker:
         # Break the loop if the 'q' key is pressed
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
+
+    mqtt_client.loop_stop()
+    mqtt_client.disconnect()
 
     # Clean up
     cap.release()
