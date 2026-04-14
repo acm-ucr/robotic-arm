@@ -188,4 +188,4 @@ def execute_synchronized_group_move(targets_dict, duration_sec=1.0, steps=20, pr
 item1 = {4: 1000, 6: 3000}
 item2= {4: 2000, 6:1000}
 
-execute_synchronized_group_move(item2)
+execute_synchronized_group_move(item1)
