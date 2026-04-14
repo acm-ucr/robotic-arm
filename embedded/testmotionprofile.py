@@ -19,6 +19,8 @@ serial_lock = threading.Lock()
 PORT = os.getenv("SERIAL_PORT")
 BAUDRATE = 1000000
 SERVO_IDS = [1, 2, 3, 4, 5, 6]
+TARGET_MAX_POSITIONS = [3000, 3000, 1000, 1000, 1900, 3300]
+TARGET_MIN_POSITIONS = [1000, 1000, 3000, 3000, 900, 1900]
 MOVE_TIME = 200  # Default fallback for raw writes
 # Expected camera ranges
 CAM_X_MIN, CAM_X_MAX = 0.0, 1.0
@@ -185,7 +187,8 @@ def execute_synchronized_group_move(targets_dict, duration_sec=1.0, steps=20, pr
 #execute_profiled_move_background(6, 3000, 4, 100)
 #execute_profiled_move(4, 2000, 4, 100)
 #execute_profiled_move(6, 1000, 4, 100)
-item1 = {4: 1000, 6: 3000}
-item2= {4: 2000, 6:1000}
+# item1 = {4: 1000, 6: 3000}
+# item2= {4: 2000, 6:1000}
 
-execute_synchronized_group_move(item1)
+# execute_synchronized_group_move(item1)
+
