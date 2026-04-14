@@ -26,15 +26,15 @@ HAND_CONNECTIONS = [
 # Global variables for dynamic Z scaling Revission 3
 min_scale = None
 max_scale = None
-min_inv_scale = None
-max_inv_scale = None
+min_inv_scale = 9  # Fixed bound
+max_inv_scale = 16  # Fixed bound
 
 def compute_hand_scale(hand_landmarks):
-    points = [(lm.x, lm.y) for lm in hand_landmarks]
-    wrist = points[0]
-    fingertips = [points[4], points[8], points[12], points[16], points[20]]
-    distances = [((x - wrist[0])**2 + (y - wrist[1])**2)**0.5 for x, y in fingertips]
-    return max(distances) if distances else 0
+    p0 = hand_landmarks[0]
+    p1 = hand_landmarks[1]
+    dx = p0.x - p1.x
+    dy = p0.y - p1.y
+    return (dx**2 + dy**2)**0.5
 
 # A global variable to store the latest results asynchronously
 latest_result = None
@@ -117,13 +117,9 @@ with HandLandmarker.create_from_options(options) as landmarker:
                     min_scale = scale
                 if max_scale is None or scale > max_scale:
                     max_scale = scale
-                if min_inv_scale is None or inv_scale < min_inv_scale:
-                    min_inv_scale = inv_scale
-                if max_inv_scale is None or inv_scale > max_inv_scale:
-                    max_inv_scale = inv_scale
 
                 z_value = 0.5
-                if max_inv_scale is not None and min_inv_scale is not None and max_inv_scale > min_inv_scale:
+                if max_inv_scale > min_inv_scale:
                     z_value = 1 - (inv_scale - min_inv_scale) / (max_inv_scale - min_inv_scale)
                 z_value = max(0, min(1, z_value))
                 
@@ -134,6 +130,7 @@ with HandLandmarker.create_from_options(options) as landmarker:
                     x = int(landmark.x * w)
                     y = int(landmark.y * h)
                     print(f"Point {idx}: ({x}, {y})")
+                print(f"Scale: {scale:.4f}, Inv Scale: {inv_scale:.4f}")
                 print(f"Z value: {z_value:.3f}")
         
         # Show the frame to the user
