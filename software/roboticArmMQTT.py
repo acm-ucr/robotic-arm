@@ -2,6 +2,29 @@ from __future__ import annotations
 import cv2
 import mediapipe as mp
 import time
+import paho.mqtt.client as mqtt
+import json
+
+# --- MQTT Setup (add near the top, after your imports) ---
+BROKER   = "127.0.0.1"   # change to broker IP if on another machine | empx
+PORT     = 1883
+TOPIC_PUB = "arm/servos"      # topic your script publishes angles to
+TOPIC_SUB = "arm/feedback"    # optional: topic the arm sends status back on
+
+mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+
+def on_connect(client, userdata, flags, rc):
+    print(f"MQTT connected (rc={rc})")
+    client.subscribe(TOPIC_SUB)   # listen for feedback from the arm
+
+def on_message(client, userdata, msg):
+    # Handles messages coming BACK from the arm (e.g. sensor readings)
+    print(f"Arm feedback: {msg.payload.decode()}")
+
+mqtt_client.on_connect = on_connect
+mqtt_client.on_message = on_message
+mqtt_client.connect(BROKER, PORT)
+mqtt_client.loop_start()   # runs MQTT in a background thread
 
 # --- Setup MediaPipe Tasks and Options ---
 BaseOptions = mp.tasks.BaseOptions
@@ -10,14 +33,31 @@ HandLandmarkerOptions = mp.tasks.vision.HandLandmarkerOptions
 HandLandmarkerResult = mp.tasks.vision.HandLandmarkerResult
 VisionRunningMode = mp.tasks.vision.RunningMode
 
-# Hand connection pairs for drawing (21 keypoints)
+# # Hand connection pairs for drawing (21 keypoints)
+# HAND_CONNECTIONS = [
+#     (0,1), (1, 2), (2, 3), (3, 4),           # Thumb
+#     (0, 5), (5, 6), (6, 7), (7, 8),           # Index
+#     (0, 9), (9, 10), (10, 11), (11, 12),      # Middle
+#     (0, 13), (13, 14), (14, 15), (15, 16),    # Ring
+#     (0, 17), (17, 18), (18, 19), (19, 20)     # Pinky
+# ]
+
 HAND_CONNECTIONS = [
-    (0, 1), (1, 2), (2, 3), (3, 4),           # Thumb
-    (0, 5), (5, 6), (6, 7), (7, 8),           # Index
-    (0, 9), (9, 10), (10, 11), (11, 12),      # Middle
-    (0, 13), (13, 14), (14, 15), (15, 16),    # Ring
-    (0, 17), (17, 18), (18, 19), (19, 20)     # Pinky
+    (0,4),(0,8),(0,12),(4,8),(8,12),(4,12)   # Pinky
 ]
+
+# Global variables for dynamic Z scaling Revission 3
+min_scale = None
+max_scale = None
+min_inv_scale = 9  # Fixed bound
+max_inv_scale = 16  # Fixed bound
+
+def compute_hand_scale(hand_landmarks):
+    p0 = hand_landmarks[0]
+    p1 = hand_landmarks[1]
+    dx = p0.x - p1.x
+    dy = p0.y - p1.y
+    return (dx**2 + dy**2)**0.5
 
 # A global variable to store the latest results asynchronously
 latest_result = None
@@ -31,9 +71,9 @@ def handle_result(result, output_image: mp.Image, timestamp_ms: int):
 
 # --- Configure the Hand Landmarker ---
 options = HandLandmarkerOptions(
-    base_options=BaseOptions(model_asset_path='hand_landmarker.task'), # Ensure this matches your downloaded model file name
+    base_options=BaseOptions(model_asset_path='robotic-arm/hand_landmarker.task'), # Ensure this matches your downloaded model file name
     running_mode=VisionRunningMode.LIVE_STREAM,
-    num_hands=2, # You can change this to detect more hands
+    num_hands=1, # You can change this to detect more hands
     result_callback=handle_result)
 
 # --- Start the Webcam Loop ---
@@ -91,6 +131,40 @@ with HandLandmarker.create_from_options(options) as landmarker:
                     x = int(landmark.x * w)
                     y = int(landmark.y * h)
                     cv2.circle(frame, (x, y), 4, (0, 0, 255), -1)
+
+                # Compute Z value based on hand scale Revision 3
+                scale = compute_hand_scale(hand_landmarks)
+                inv_scale = 1.0 / scale if scale > 0 else 0
+
+                if min_scale is None or scale < min_scale:
+                    min_scale = scale
+                if max_scale is None or scale > max_scale:
+                    max_scale = scale
+
+                z_value = 0.5
+                if max_inv_scale > min_inv_scale:
+                    z_value = 1 - (inv_scale - min_inv_scale) / (max_inv_scale - min_inv_scale)
+                z_value = max(0, min(1, z_value))
+
+                # publish wrist position as a simple test payload
+                wrist = hand_landmarks[0]
+                payload = json.dumps({
+                    "wrist_x": round(wrist.x, 3),
+                    "wrist_y": round(wrist.y, 3),
+                    "z": round(z_value, 3),
+                })
+
+                mqtt_client.publish(TOPIC_PUB, payload)
+                
+                # Output information RoboticArm.py Revision 2
+                print(f"Number of lines: {len(HAND_CONNECTIONS)}")
+                for idx in [0, 4, 8, 12]:
+                    landmark = hand_landmarks[idx]
+                    x = int(landmark.x * w)
+                    y = int(landmark.y * h)
+                    print(f"Point {idx}: ({x}, {y})")
+                print(f"Scale: {scale:.4f}, Inv Scale: {inv_scale:.4f}")
+                print(f"Z value: {z_value:.3f}")
         
         # Show the frame to the user
         cv2.imshow('MediaPipe Hand Landmarker (Live Stream)', frame)
@@ -99,6 +173,11 @@ with HandLandmarker.create_from_options(options) as landmarker:
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
+    mqtt_client.loop_stop()
+    mqtt_client.disconnect()
+
     # Clean up
     cap.release()
     cv2.destroyAllWindows()
+
+    # & "C:\Program Files\mosquitto\mosquitto_sub.exe" -t "arm/servos" -v
