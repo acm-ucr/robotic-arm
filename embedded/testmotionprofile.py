@@ -100,26 +100,20 @@ def default_pos():
 # ====== MOTION PROFILING / INTERPOLATION ======
 # ==========================================
 
-def ease_in_out(t):
-    """Returns a smooth ease-in-ease-out factor between 0 and 1 using a cosine wave."""
-    return (1 - math.cos(t * math.pi)) / 2
-
-def generate_motion_profile(start_pos, target_pos, steps, profile_type="ease"):
+def generate_motion_profile(start_pos, target_pos, steps):
     """Generates a list of waypoint positions forming a motion profile."""
     positions = []
     for i in range(steps + 1):
         t = i / steps if steps > 0 else 1
         
-        if profile_type == "ease":
-            factor = ease_in_out(t)
-        else: # linear fallback
-            factor = t
+        """Returns a smooth ease-in-ease-out factor between 0 and 1 using a cosine wave."""
+        factor = (1 - math.cos(t * math.pi)) / 2
             
         current_target = int(start_pos + (target_pos - start_pos) * factor)
         positions.append(current_target)
     return positions
 
-def execute_profiled_move(servo_id, target_pos, duration_sec=1.0, steps=20, profile_type="ease"):
+def execute_profiled_move(servo_id, target_pos, duration_sec=1.0, steps=100):
     """
     Executes a smooth, interpolated movement to a target position.
     """
@@ -130,7 +124,7 @@ def execute_profiled_move(servo_id, target_pos, duration_sec=1.0, steps=20, prof
         return
 
     # Generate the trajectory waypoints
-    waypoints = generate_motion_profile(start_pos, target_pos, steps, profile_type)
+    waypoints = generate_motion_profile(start_pos, target_pos, steps)
     
     # Calculate the time to wait between sending each waypoint
     step_delay = duration_sec / steps
@@ -145,20 +139,20 @@ def execute_profiled_move(servo_id, target_pos, duration_sec=1.0, steps=20, prof
         write_position(servo_id, pos, move_time=step_move_time_ms)
         time.sleep(step_delay)
 
-def execute_profiled_move_background(servo_id, target_pos, duration_sec=1.0, steps=20, profile_type="ease"):
+def execute_profiled_move_background(servo_id, target_pos, duration_sec=1.0, steps=100):
     """
     Spawns a background thread to execute a profiled move without blocking the main script.
     Allows multiple servos to be commanded to move simultaneously.
     """
     thread = threading.Thread(
         target=execute_profiled_move, 
-        args=(servo_id, target_pos, duration_sec, steps, profile_type),
+        args=(servo_id, target_pos, duration_sec, steps),
         daemon=True # Ensures the thread dies if the main program closes
     )
     thread.start()
     return thread
 
-def execute_synchronized_group_move(targets_dict, duration_sec=1.0, profile_type="ease"):
+def execute_synchronized_group_move(targets_dict, duration_sec=1.0):
     """
     Moves multiple servos in perfect synchronization without threading jitter.
     Pass in a dictionary: {servo_id: target_position}
@@ -177,7 +171,7 @@ def execute_synchronized_group_move(targets_dict, duration_sec=1.0, profile_type
         
         starting_positions[servo_id] = start_pos
         # Generate the math profile for this specific servo
-        waypoints_dict[servo_id] = generate_motion_profile(start_pos, target_pos, steps, profile_type)
+        waypoints_dict[servo_id] = generate_motion_profile(start_pos, target_pos, steps)
 
     if not waypoints_dict:
         return
@@ -202,7 +196,7 @@ def execute_synchronized_group_move(targets_dict, duration_sec=1.0, profile_type
 # execute_synchronized_group_move(item1)
 # default_pos()
 test = {1: 2000, 2: 2000, 3: 2000, 4: 2000, 5: 1000, 6: 1000}
-execute_synchronized_group_move(test, 2)
+execute_synchronized_group_move(test, 1)
 time.sleep(1)
 default_pos()
 
