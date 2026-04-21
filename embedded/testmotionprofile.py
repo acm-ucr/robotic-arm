@@ -6,6 +6,8 @@ import math
 import os
 import threading
 from dotenv import load_dotenv
+import random
+from paho.mqtt import client as mqtt_client
 
 load_dotenv()
 serial_lock = threading.Lock()
