@@ -1,10 +1,15 @@
 # USED TO FIND THE POSITION OF THE MOTORS MANUALLY AND EXECUTE MOTION PROFILES
 
+# https://files.seeedstudio.com/products/Feetech/101090142_Feetech_ST-3215-C046_Datasheet.pdf
+# motor range = 0 - 4095, neutral pos - 2048
+
 import time
 import serial
 import math
 import os
 import threading
+import json
+import paho.mqtt.client as mqtt
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -22,12 +27,17 @@ SERVO_IDS = [1, 2, 3, 4, 5, 6]
 TARGET_MAX_POSITIONS = [3000, 3000, 1000, 1000, 3800, 3300]
 TARGET_MIN_POSITIONS = [1000, 1000, 3000, 3000, 1500, 1900]
 MOVE_TIME = 200  # Default fallback for raw writes
-# Expected camera ranges
+# Expected camera ranges   
 CAM_X_MIN, CAM_X_MAX = 0.0, 1.0
 CAM_Y_MIN, CAM_Y_MAX = 0.0, 1.0
 CAM_Z_MIN, CAM_Z_MAX = 0.0, 1.0
 OP_MIN, OP_MAX = 0, 300
 # =====================
+
+# --- MQTT SETTINGS ---
+MQTT_BROKER = "broker.emqx.io"
+MQTT_PORT   = 1883
+MQTT_TOPIC  = "robotic_arm/command"
 
 try:
     ser = serial.Serial(PORT, BAUDRATE, timeout=0.1)
@@ -92,9 +102,9 @@ def default_pos():
     move_claw = {5: TARGET_MIN_POSITIONS[4], 6:TARGET_MIN_POSITIONS[5]}
     move_arm = {1: TARGET_MIN_POSITIONS[0], 2: TARGET_MIN_POSITIONS[1], 3: TARGET_MIN_POSITIONS[2], 4: 2000}
     move_wrist = {4: TARGET_MIN_POSITIONS[3]}
-    execute_synchronized_group_move(move_claw, 1)
-    execute_synchronized_group_move(move_arm, 1)
-    execute_synchronized_group_move(move_wrist, 1)
+    execute_synchronized_group_move(move_claw, 2)
+    execute_synchronized_group_move(move_arm, 2)
+    execute_synchronized_group_move(move_wrist, 2)
 
 # ==========================================
 # ====== MOTION PROFILING / INTERPOLATION ======
@@ -186,6 +196,13 @@ def execute_synchronized_group_move(targets_dict, duration_sec=1.0):
         
         # Wait once per global step, rather than once per motor
         time.sleep(step_delay)
+
+def position_to_move_to(servo_id, move_angle):
+    cur_pos = read_position(servo_id)
+    pos_offset = move_angle * 11.3
+    return cur_pos + pos_offset
+
+
 #execute_profiled_move_background(4, 1000, 4, 100)
 #execute_profiled_move_background(6, 3000, 4, 100)
 #execute_profiled_move(4, 2000, 4, 100)
@@ -195,9 +212,14 @@ def execute_synchronized_group_move(targets_dict, duration_sec=1.0):
 
 # execute_synchronized_group_move(item1)
 # default_pos()
-test = {1: 2000, 2: 2000, 3: 2000, 4: 2000, 5: 1000, 6: 1000}
+# test = {1: 2000, 2: 2000, 3: 2000, 4: 2000, 5: 1000, 6: 1000}
+# execute_synchronized_group_move(test, 1)
+# time.sleep(1)
+test = {1: 1023}
+default_pos()
 execute_synchronized_group_move(test, 1)
 time.sleep(1)
-default_pos()
+test[1] = position_to_move_to(1, 90)
+execute_synchronized_group_move(test, 1)
 
 

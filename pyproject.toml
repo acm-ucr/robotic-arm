@@ -7,5 +7,6 @@ requires-python = ">=3.14"
 dependencies = [
     "dotenv>=0.9.9",
     "keyboard>=0.13.5",
+    "paho-mqtt>=2.1.0",
     "pyserial>=3.5",
 ]
