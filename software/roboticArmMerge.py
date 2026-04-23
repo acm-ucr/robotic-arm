@@ -6,7 +6,7 @@ import json
 import paho.mqtt.client as mqtt
 
 # --- MQTT Setup ---
-BROKER = "broker.hivemq.com"
+BROKER = "127.0.0.1"
 PORT = 1883
 TOPIC_PUB = "arm/servos"
 TOPIC_SUB = "arm/feedback"
@@ -167,8 +167,7 @@ with HandLandmarker.create_from_options(hand_options) as hand_landmarker, \
                 for label, idx in zip(arm_labels, arm_indices):
                     lm = pose_landmarks[idx]
                     x, y = int(lm.x * w), int(lm.y * h)
-                    z = lm.z  # Z coordinate from MediaPipe (normalized)
-                    print(f"  {label} (idx {idx}): ({x}, {y}, {z:.3f}) | Visibility: {lm.visibility:.3f}")
+                    print(f"  {label} (idx {idx}): ({x}, {y}) | Visibility: {lm.visibility:.3f}")
 
         # --- Draw Hand ---
         if selected_hand:
@@ -210,10 +209,10 @@ with HandLandmarker.create_from_options(hand_options) as hand_landmarker, \
 
             # Publish MQTT data
             payload = json.dumps({
-                "x": round(wrist.x, 3), # wrist_x
-                "y": round(wrist.y, 3), # wrist_y
-                # "hand_center_x": round(hand_center_x, 3),
-                # "hand_center_y": round(hand_center_y, 3),
+                "wrist_x": round(wrist.x, 3),
+                "wrist_y": round(wrist.y, 3),
+                "hand_center_x": round(hand_center_x, 3),
+                "hand_center_y": round(hand_center_y, 3),
                 "z": round(z_value, 3),
             })
             mqtt_client.publish(TOPIC_PUB, payload)
