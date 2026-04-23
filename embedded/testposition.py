@@ -96,21 +96,22 @@ def read_all_positions():
 while True:
     print("---- Servo Positions ----")
     print("Press Ctrl-C to quit")
-    write_position(6,random.randint(847,3212))
+    write_position(6,random.randint(847,3212)) 
     time.sleep(1)
-    write_position(5,random.randint(836,3205))
+    write_position(5,random.randint(836,3205)) # changing this the arm goes back
     time.sleep(1)
-    write_position(4,random.randint(933,1036))
+    write_position(4,random.randint(933,1000))
     time.sleep(1)
     write_position(3,random.randint(1036,2846))
     time.sleep(1)
-    write_position(2,random.randint(144,3175)) # forward-back
+    write_position(2,random.randint(144,2500))
     time.sleep(1)
-    write_position(1,random.randint(1641,2765)) # left-right
+    write_position(1,random.randint(1641,2765)) # changing this the claw opens
     time.sleep(1)
+    # servos 3, 2, 1 control the x,y,z axes of the claw.
+    # servos 4, 5, 6 control the x, y, z axes of the arm.
     read_all_positions()
     time.sleep(1)
-    
     
 # motor min max
 # 1: 847 3212
