@@ -230,9 +230,12 @@ with HandLandmarker.create_from_options(hand_options) as hand_landmarker, \
             # Publish MQTT data
             grip = compute_grip(selected_hand)
             rotation = compute_rotation(selected_hand)
+            mapped_x = round(1.0 - wrist.y, 3)        # 0 at bottom, 1 at top
+            mapped_y = round(wrist.x - 0.5, 3)        # 0 at center, -0.5 left, +0.5 right
+
             payload = json.dumps({
-                "x": round(wrist.x, 3),
-                "y": round(wrist.y, 3),
+                "x": mapped_x,
+                "y": mapped_y,
                 "z": round(z_value, 3),
                 "grip": grip,
                 "rotation": rotation,
