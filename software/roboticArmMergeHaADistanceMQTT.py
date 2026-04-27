@@ -3,6 +3,7 @@ import cv2
 import mediapipe as mp
 import time
 import json
+import math
 import paho.mqtt.client as mqtt
 
 # --- MQTT Setup ---
@@ -66,6 +67,24 @@ def compute_hand_scale(hand_landmarks):
     dx = p0.x - p1.x
     dy = p0.y - p1.y
     return (dx**2 + dy**2)**0.5
+
+def compute_grip(hand_landmarks):
+    palm = hand_landmarks[0]
+    fingertips = [hand_landmarks[i] for i in [4, 8, 12, 16, 20]]
+    MAX_DIST = 0.35
+    avg_dist = sum(
+        ((f.x - palm.x)**2 + (f.y - palm.y)**2)**0.5
+        for f in fingertips
+    ) / len(fingertips)
+    return round(1.0 - min(avg_dist / MAX_DIST, 1.0), 3)
+
+def compute_rotation(hand_landmarks):
+    wrist = hand_landmarks[0]
+    mid_mcp = hand_landmarks[9]
+    dx = mid_mcp.x - wrist.x
+    dy = mid_mcp.y - wrist.y
+    angle = math.degrees(math.atan2(-dy, dx))
+    return round(angle - 90, 1)
 
 def handle_hand_result(result, output_image: mp.Image, timestamp_ms: int):
     global latest_hand_result
@@ -209,17 +228,19 @@ with HandLandmarker.create_from_options(hand_options) as hand_landmarker, \
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
             # Publish MQTT data
+            grip = compute_grip(selected_hand)
+            rotation = compute_rotation(selected_hand)
             payload = json.dumps({
-                "x": round(wrist.x, 3), # wrist_x
-                "y": round(wrist.y, 3), # wrist_y
-                # "hand_center_x": round(hand_center_x, 3),
-                # "hand_center_y": round(hand_center_y, 3),
+                "x": round(wrist.x, 3),
+                "y": round(wrist.y, 3),
                 "z": round(z_value, 3),
+                "grip": grip,
+                "rotation": rotation,
             })
             mqtt_client.publish(TOPIC_PUB, payload)
 
             # Print debug info
-            print(f"Hand: {selected_handedness.display_name} | Z: {z_value:.3f} | Scale: {scale:.4f}")
+            print(f"Hand: {selected_handedness.display_name} | Z: {z_value:.3f} | Scale: {scale:.4f} | Grip: {grip:.3f} | Rotation: {rotation:.1f}°")
 
         cv2.imshow('Hand + Pose Tracking with Distance', frame)
 
