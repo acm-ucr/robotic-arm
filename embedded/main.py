@@ -7,7 +7,7 @@ from paho.mqtt import client as mqtt_client
 
 broker = 'broker.hivemq.com'
 port = 1883
-topic = "python/mqtt"
+topic = "arm/servos"
 # Generate a Client ID with the subscribe prefix.
 client_id = f'subscribe-{random.randint(0, 100)}'
 # username = 'emqx'
