@@ -5,6 +5,17 @@
 # physical dimensions:
 # arm max length : 18 inches
 # arm min length : 10 inches
+# min and max motor positions:
+# (min, max)
+# Servo 1: (800, 3450)
+# Servo 2: (850, 3200)
+# Servo 3: (3100, 940)
+# Servo 4: (2940, 880)
+# Servo 5: (1050, 760)
+# Servo 6: (2030, 3500) 
+# waypoints:
+# 
+
 
 
 import time
@@ -28,8 +39,8 @@ serial_lock = threading.Lock()
 PORT = os.getenv("SERIAL_PORT")
 BAUDRATE = 1000000
 SERVO_IDS = [1, 2, 3, 4, 5, 6]
-TARGET_MAX_POSITIONS = [3000, 3000, 1000, 1000, 3800, 3300]
-TARGET_MIN_POSITIONS = [1000, 1000, 3000, 3000, 1500, 1900]
+TARGET_MAX_POSITIONS = [3450, 3200, 940, 880, 760, 3500]
+TARGET_MIN_POSITIONS = [800, 850, 3100, 2940, 1050, 2030]
 MOVE_TIME = 200  # Default fallback for raw writes
 # Expected camera ranges   
 CAM_X_MIN, CAM_X_MAX = 0.0, 1.0
@@ -279,13 +290,27 @@ def position_to_move_to(servo_id, move_angle):
 # Y = [0, 1], 0 = bottom of camera, 1 = top of camera
 # Z = [0, 1], 0 = claw as close to base as possible, 1 = arm fully extended
 def move_arm(x, y, z): 
-    dict = {1: 0}
-    baseAngle = math.degrees(math.atan((2*y)/z))
-    dict[1] = position_to_move_to(1, baseAngle)
+    dict = {1:0, 2:0, 3:0, 4:0, 5:0, 6:0}
+    move_base(dict)
     return dict
 # currently this just calculates the angle needed to move the base with Y and Z, 
 # need to figure out how to translate X and Z values to the arm
+# x is unused
+def move_base(dict, x, y, z) :
+    baseAngle = math.degrees(math.atan((2*y)/z))
+    dict[1] = position_to_move_to(1, baseAngle)
 
+# UNTESTED DONT TRUST IT
+# (0, .., 0) : 2:850, 3:3100
+# (1, .., 1) : 2:3200, 3:940
+# ranges: motor 1: 2350, motor 2: 2160
+# y is unused
+def move_horizontal(dict, x, y, z) :
+    lineLength = math.sqrt(x*x + z*z)
+    twoOffset = 2350 * lineLength
+    threeOffset = 2160 * lineLength
+    dict[2] = 2350 - twoOffset
+    dict[3] = 940 + threeOffset
 
 # test = {1: 1023}
 # y = 0.5
