@@ -1,23 +1,17 @@
 #USED TO FIND THE POSITION OF THE MOTORS MANUALLY
+
 import time
-import random
+
 import serial
 import json
-# import keyboard
-
-# import paho.mqtt.client as mqtt
-# broker = 'broker.emqx.io'
-# port = 1883
-# topic = "python/mqtt"
-# client_id = f'python-mqtt-{random.randint(0, 1000)}'
-# username = 'emqx'
-# password = 'public'
-
+import os
+from dotenv import load_dotenv
+load_dotenv()
 
 # ====== CONFIG ======
 #change to your port name and check device manager if unsure
-PORT = "COM3"  
-BAUDRATE = 1000000 #keep at 1 million
+PORT = os.getenv("SERIAL_PORT")  
+BAUDRATE = 1000000
 SERVO_IDS = [1, 2, 3, 4, 5, 6]
 MOVE_TIME = 200  # faster for live tracking
 # Expected camera ranges
@@ -92,31 +86,8 @@ def read_all_positions():
 
     return positions
 
-# ctrl c to quit
+
 while True:
     print("---- Servo Positions ----")
-    print("Press Ctrl-C to quit")
-    write_position(6,random.randint(847,3212)) 
-    time.sleep(1)
-    write_position(5,random.randint(836,3205)) # changing this the arm goes back
-    time.sleep(1)
-    write_position(4,random.randint(933,1000))
-    time.sleep(1)
-    write_position(3,random.randint(1036,2846))
-    time.sleep(1)
-    write_position(2,random.randint(144,2500))
-    time.sleep(1)
-    write_position(1,random.randint(1641,2765)) # changing this the claw opens
-    time.sleep(1)
-    # servos 3, 2, 1 control the x,y,z axes of the claw.
-    # servos 4, 5, 6 control the x, y, z axes of the arm.
     read_all_positions()
     time.sleep(1)
-    
-# motor min max
-# 1: 847 3212
-# 2: 836 3205
-# 3: 933 1856
-# 4: 1036 2846
-# 5: 144 3175
-# 6: 1641 2765
