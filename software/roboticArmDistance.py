@@ -49,7 +49,7 @@ def handle_result(result, output_image: mp.Image, timestamp_ms: int):
 
 # --- Configure the Hand Landmarker ---
 options = HandLandmarkerOptions(
-    base_options=BaseOptions(model_asset_path='robotic-arm/hand_landmarker.task'), # Ensure this matches your downloaded model file name
+    base_options=BaseOptions(model_asset_path='hand_landmarker.task'), # Ensure this matches your downloaded model file name
     running_mode=VisionRunningMode.LIVE_STREAM,
     num_hands=1, # You can change this to detect more hands
     result_callback=handle_result)
