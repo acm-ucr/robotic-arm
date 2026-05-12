@@ -16,14 +16,19 @@ MOVE_TIME_MS = int(LOOP_DELAY * 1000) # Sync motor move time to tick rate
 
 # Map keys to (Servo_ID, Direction_Multiplier)
 KEY_MAPPING = {
+    'a': (1, 1),   # Hold E -> Servo 2 moves up
+    'd': (1, -1),
     'w': (2, 1),   # Hold W -> Servo 1 moves up
     's': (2, -1),  # Hold S -> Servo 1 moves down
-    'a': (1, 1),   # Hold E -> Servo 2 moves up
-    'd': (1, -1),  # Hold D -> Servo 2 moves down
+    'r': (3, 1),   # Hold W -> Servo 1 moves up
+    'f': (3, -1),
+    't': (4, 1),
+    'g': (4,-1),
+    'j': (5, -1),
+    'k': (5, 1),
     'u': (6, 1),
     'i': (6,-1),
-    'r': (4, 1),
-    'f': (4,-1)
+    
 }
 
 # Track theoretical current positions (Defaulting to middle: 2048)
