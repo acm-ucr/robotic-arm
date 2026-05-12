@@ -6,6 +6,9 @@ import json
 import math
 import paho.mqtt.client as mqtt
 import numpy as np
+import os
+from dotenv import load_dotenv
+load_dotenv()
 
 # --- MQTT Setup ---
 BROKER = "broker.hivemq.com"
@@ -15,7 +18,7 @@ TOPIC_SUB = "arm/feedback"
 
 mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
 
-def on_connect(client, userdata, flags, rc):
+def on_connect(client, userdata, flags, rc, properties=None):
     print(f"MQTT connected (rc={rc})")
     client.subscribe(TOPIC_SUB)
 
@@ -186,7 +189,7 @@ pose_options = PoseLandmarkerOptions(
 with HandLandmarker.create_from_options(hand_options) as hand_landmarker, \
      PoseLandmarker.create_from_options(pose_options) as pose_landmarker:
 
-    cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture(int(os.getenv("DEVICE_INDEX")))
 
     if not cap.isOpened():
         print("Error: Could not open webcam.")
