@@ -38,6 +38,7 @@ def subscribe(client: mqtt_client):
     def on_message(client, userdata, msg):
         decoded = json.loads(msg.payload.decode())
         print(decoded)
+        
 
     client.subscribe(topic)
     client.on_message = on_message

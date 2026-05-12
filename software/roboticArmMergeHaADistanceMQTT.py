@@ -286,7 +286,7 @@ with HandLandmarker.create_from_options(hand_options) as hand_landmarker, \
             grip = compute_grip(selected_hand)
             orientation, orientation_angle = compute_rotation(selected_world_hand)
             payload = json.dumps({
-                "x": round(wrist.x, 3),
+                "x": round(wrist.x, 3) - 0.5,
                 "y": round(wrist.y, 3),
                 "z": round(z_value, 3),
                 "grip": grip,
