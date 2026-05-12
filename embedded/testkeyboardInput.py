@@ -143,5 +143,3 @@ if __name__ == "__main__":
     if ser is not None:
         sync_positions_from_hardware()
     continuous_movement_loop()
-
-# use sudo .venv/bin/python embedded/testkeyboardInput.py

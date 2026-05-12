@@ -1,6 +1,9 @@
 # python 3.11
 
+# python 3.11
+import json
 import random
+from testmotionprofile import move_arm
 
 from paho.mqtt import client as mqtt_client
 
@@ -30,10 +33,11 @@ def connect_mqtt() -> mqtt_client.Client:
     client.connect(broker, port)
     return client
 
-
+#Format: {"x": 0.233, "y": 0.593, "z": 0, "grip": 0.857, "palm_orientation": "left", "orientation_angle": -90.0}
 def subscribe(client: mqtt_client):
     def on_message(client, userdata, msg):
-        print(f"Received `{msg.payload.decode()}` from `{msg.topic}` topic")
+        decoded = json.loads(msg.payload.decode())
+        print(decoded)
 
     client.subscribe(topic)
     client.on_message = on_message
@@ -47,3 +51,4 @@ def run():
 
 if __name__ == '__main__':
     run()
+

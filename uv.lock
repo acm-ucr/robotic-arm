@@ -2826,6 +2826,9 @@ dependencies = [
 requires-dist = [
     { name = "dotenv", specifier = ">=0.9.9" },
     { name = "keyboard", specifier = ">=0.13.5" },
+    { name = "paho-mqtt", specifier = ">=2.1.0" },
+    { name = "pyserial", specifier = ">=3.5" },
+]
     { name = "mediapipe", specifier = ">=0.10.33" },
     { name = "mqtt", specifier = ">=0.0.1" },
     { name = "opencv-python", specifier = ">=4.13.0.92" },
