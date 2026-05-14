@@ -4,7 +4,6 @@
 import json
 import random
 from testmotionprofile import move_arm
-
 from paho.mqtt import client as mqtt_client
 
 

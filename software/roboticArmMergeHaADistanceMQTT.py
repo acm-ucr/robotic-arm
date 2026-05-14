@@ -189,7 +189,8 @@ pose_options = PoseLandmarkerOptions(
 with HandLandmarker.create_from_options(hand_options) as hand_landmarker, \
      PoseLandmarker.create_from_options(pose_options) as pose_landmarker:
 
-    cap = cv2.VideoCapture(int(os.getenv("DEVICE_INDEX")))
+    # cap = cv2.VideoCapture(int(os.getenv("DEVICE_INDEX")))
+    cap = cv2.VideoCapture(0)
 
     if not cap.isOpened():
         print("Error: Could not open webcam.")
