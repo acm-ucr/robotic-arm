@@ -138,7 +138,7 @@ def generate_motion_profile(start_pos, target_pos, steps):
         positions.append(current_target)
     return positions
 
-def execute_profiled_move(servo_id, target_pos, duration_sec=1.0, steps=100):
+def move_single(servo_id, target_pos, duration_sec=1.0, steps=100):
     """
     Executes a smooth, interpolated movement to a target position.
     """
@@ -213,7 +213,7 @@ def execute_profiled_move_background(servo_id, target_pos, duration_sec=1.0, ste
 #         # Wait once per global step, rather than once per motor
 #         time.sleep(step_delay)
 
-def execute_synchronized_group_move(targets_dict, speed_units_per_sec=3000.0):
+def move_multiple(targets_dict, speed_units_per_sec=3000.0):
     """
     Moves multiple servos in perfect synchronization.
     Duration and steps are dynamically calculated based on the maximum change 
@@ -331,6 +331,16 @@ def move_horizontal(dict, x, y, z) :
     # execute_synchronized_group_move(move_arm(0, 0, 1))
     # time.sleep(0.25)
 
+test = {1: 1023, 2: 1023, 3:1023}
+move_multiple(test)
+time.sleep(1)
 
+move_horizontal(test, 0, 0, 0)
+move_multiple(test)
+time.sleep(1)
+
+move_horizontal(test, 0, 0, 1)
+move_multiple(test)
+time.sleep(1)
 
 
