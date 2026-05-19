@@ -3,8 +3,10 @@
 # https://files.seeedstudio.com/products/Feetech/101090142_Feetech_ST-3215-C046_Datasheet.pdf
 # motor range = 0 - 4095, neutral pos - 2048
 # physical dimensions:
-# arm max length : 18 inches
+# arm max length : 16 inches
 # arm min length : 10 inches
+# upper arm: 5.592 inches
+# forearm: 124.09mm - 4.885 inches
 # min and max motor positions:
 # (min, max)
 # Servo 1: (800, 3450)
@@ -291,7 +293,7 @@ def position_to_move_to(servo_id, move_angle):
 # Z = [0, 1], 0 = claw as close to base as possible, 1 = arm fully extended
 def move_arm(x, y, z): 
     dict = {1:0, 2:0, 3:0, 4:0, 5:0, 6:0}
-    move_base(dict)
+    move_base(dict, x, y, z)
     return dict
 # currently this just calculates the angle needed to move the base with Y and Z, 
 # need to figure out how to translate X and Z values to the arm
@@ -300,7 +302,6 @@ def move_base(dict, x, y, z) :
     baseAngle = math.degrees(math.atan((2*y)/z))
     dict[1] = position_to_move_to(1, baseAngle)
 
-# UNTESTED DONT TRUST IT
 # (0, .., 0) : 2:850, 3:3100
 # (1, .., 1) : 2:3200, 3:940
 # ranges: motor 1: 2350, motor 2: 2160
@@ -312,10 +313,13 @@ def move_horizontal(dict, x, y, z) :
     dict[2] = 850 + twoOffset
     dict[3] = 3100 - threeOffset
 
-# test = {1: 1023}
-# y = 0.5
-# z = 1
-# theta = -45
+def move_vertical(dict, x, y, z) :
+    # find position of motor 4 in real life given upper arm, forearm measurements and motor 2 and 3 positions
+    # translate to x,y,z coords (call it real x,y,z)
+    # calculate difference in requested x,y,z (the coords being sent by cam) and real x,y,z
+    # find relationship in motor 2 and 3 and move until motor 3 is as close as possible
+    # adjust to true vertical value using motor 4
+    # upper arm and forearm measurements are at top of page
 
 # execute_profiled_move(1, 2048)
 # test[1] = position_to_move_to(1, theta)
@@ -339,9 +343,9 @@ time.sleep(1)
 # move_multiple(test)
 # time.sleep(2)
 
-# move_horizontal(test, 0, 0, 0.5)
-# move_multiple(test)
-# time.sleep(2)
+move_horizontal(test, 0, 0, 0.5)
+move_multiple(test)
+time.sleep(2)
 
 # move_horizontal(test, 0, 0, 0.75)
 # move_multiple(test)
