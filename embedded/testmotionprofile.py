@@ -41,8 +41,8 @@ serial_lock = threading.Lock()
 PORT = os.getenv("SERIAL_PORT")
 BAUDRATE = 1000000
 SERVO_IDS = [1, 2, 3, 4, 5, 6]
-TARGET_MAX_POSITIONS = [3450, 3200, 940, 880, 760, 3500]
-TARGET_MIN_POSITIONS = [800, 850, 3100, 2940, 1050, 2030]
+TARGET_MAX_POSITIONS = {1: 3450, 2: 3200, 3: 940, 4: 880, 5: 760, 6: 3500}
+TARGET_MIN_POSITIONS = {1: 800, 2: 850, 3: 3100, 4: 2940, 5: 1050, 6: 2030}
 MOVE_TIME = 200  # Default fallback for raw writes
 # Expected camera ranges   
 CAM_X_MIN, CAM_X_MAX = 0.0, 1.0
@@ -116,9 +116,9 @@ def read_all_positions():
     return positions
 
 def default_pos():
-    move_claw = {5: TARGET_MIN_POSITIONS[4], 6:TARGET_MIN_POSITIONS[5]}
-    move_arm = {1: TARGET_MIN_POSITIONS[0], 2: TARGET_MIN_POSITIONS[1], 3: TARGET_MIN_POSITIONS[2], 4: 2000}
-    move_wrist = {4: TARGET_MIN_POSITIONS[3]}
+    move_claw = {5: TARGET_MIN_POSITIONS[5], 6:TARGET_MIN_POSITIONS[6]}
+    move_arm = {1: TARGET_MIN_POSITIONS[1], 2: TARGET_MIN_POSITIONS[2], 3: TARGET_MIN_POSITIONS[3], 4: 2000}
+    move_wrist = {4: TARGET_MIN_POSITIONS[4]}
     move_multiple(move_claw, 2)
     move_multiple(move_arm, 2)
     move_multiple(move_wrist, 2)
@@ -283,75 +283,81 @@ def move_multiple(targets_dict, speed_units_per_sec=2000.0):
 
 # calculates the position the given motor needs to move by "move_angle" degrees 
 # from the neutral angle of 180 degrees (pos 2048)
-def position_to_move_to(servo_id, move_angle):
+def position_of_angle(servo_id, move_angle):
     pos_offset = move_angle * 11.3
     return 2048 + pos_offset
 
+# UNTESTED
+# calculates the angle the arm needs to point to,
+# taken from the x-z axis
+# moves motor 1
+# y is unused
+def get_base_angle(dict, x, y, z) :
+    baseAngle = math.degrees(math.atan(x/z)) # gets angle relative to the z axis
+    dict[1] = position_of_angle(1, baseAngle)
+
+# UNTESTED
+# calculates length of the point from origin
+# and extends arm to that length with motor 2 and 3
+# (0, .., 0) : 2:850, 3:3100
+# (1, .., 1) : 2:3200, 3:940
+# ranges: motor 2: 2350, motor 3: 2160
+def get_arm_length(dict, x, y, z) :
+    lineLength = math.sqrt(x*x + y*y + z*z)
+    twoOffset = 2350 * lineLength
+    threeOffset = 2160 * lineLength
+    dict[2] = 850 + twoOffset
+    dict[3] = 3100 - threeOffset
+
+# UNTESTED
+# calculates pitch angle (complementary angle to phi in spherical coords)
+# and adds offset of that angle to motor 2's position
+def get_pitch_angle(dict, x, y, z) :
+    adjacent = math.sqrt(x*x + z*z)
+    opposite = y
+    pitchAngle = math.degrees(math.atan(opposite/adjacent))
+    posOffset = pitchAngle * 11.3
+    dict[2] = dict[2] + posOffset
+
+# ensures motors do not go outside of operating range
+def motor_clamping(dict) :
+    for id in dict.keys() :
+        if dict[id] > TARGET_MAX_POSITIONS[id] :
+            dict[id] = TARGET_MAX_POSITIONS
+        elif dict[id] < TARGET_MIN_POSITIONS[id] :
+            dict[id] = TARGET_MIN_POSITIONS[id]
+
+# UNTESTED
 # translates the x,y,z coords given from software in the perspective of the camera
 # X = [-0.5, 0.5], -0.5 = left of camera, 0.5 = right of camera
 # Y = [0, 1], 0 = bottom of camera, 1 = top of camera
 # Z = [0, 1], 0 = claw as close to base as possible, 1 = arm fully extended
 def move_arm(x, y, z): 
     dict = {1:0, 2:0, 3:0, 4:0, 5:0, 6:0}
-    move_base(dict, x, y, z)
-    return dict
-# currently this just calculates the angle needed to move the base with Y and Z, 
-# need to figure out how to translate X and Z values to the arm
-# x is unused
-def move_base(dict, x, y, z) :
-    baseAngle = math.degrees(math.atan((2*y)/z))
-    dict[1] = position_to_move_to(1, baseAngle)
+    get_base_angle(dict, x, y, z)
+    get_arm_length(dict, x, y, z)
+    get_pitch_angle(dict, x, y, z)
+    motor_clamping(dict)
 
-# (0, .., 0) : 2:850, 3:3100
-# (1, .., 1) : 2:3200, 3:940
-# ranges: motor 1: 2350, motor 2: 2160
-# y is unused
-def move_horizontal(dict, x, y, z) :
-    lineLength = math.sqrt(x*x + z*z)
-    twoOffset = 2350 * lineLength
-    threeOffset = 2160 * lineLength
-    dict[2] = 850 + twoOffset
-    dict[3] = 3100 - threeOffset
+    move_multiple(dict)
 
-def move_vertical(dict, x, y, z) :
-    # find position of motor 4 in real life given upper arm, forearm measurements and motor 2 and 3 positions
-    # translate to x,y,z coords (call it real x,y,z)
-    # calculate difference in requested x,y,z (the coords being sent by cam) and real x,y,z
-    # find relationship in motor 2 and 3 and move until motor 3 is as close as possible
-    # adjust to true vertical value using motor 4
-    # upper arm and forearm measurements are at top of page
+# test = {1: 2048, 2: 850, 3:3100, 4: 880}
+# move_multiple(test)
+# time.sleep(1)
 
-# execute_profiled_move(1, 2048)
-# test[1] = position_to_move_to(1, theta)
-# print(theta)
-# execute_synchronized_group_move(test, 1)
-# while (1):
-    # execute_synchronized_group_move(move_arm(0, .5, 1))
-    # time.sleep(0.25)
-    # execute_synchronized_group_move(move_arm(0, 0, 1))
-    # time.sleep(0.25)
-    # execute_synchronized_group_move(move_arm(0, -.5, 1))
-    # time.sleep(0.25)
-    # execute_synchronized_group_move(move_arm(0, 0, 1))
-    # time.sleep(0.25)
-
-test = {1: 2048, 2: 850, 3:3100, 4: 880}
-move_multiple(test)
-time.sleep(1)
-
-# move_horizontal(test, 0, 0, 0.25)
+# get_arm_length(test, 0, 0, 0.25)
 # move_multiple(test)
 # time.sleep(2)
 
-move_horizontal(test, 0, 0, 0.5)
-move_multiple(test)
-time.sleep(2)
-
-# move_horizontal(test, 0, 0, 0.75)
+# get_arm_length(test, 0, 0, 0.5)
 # move_multiple(test)
 # time.sleep(2)
 
-# move_horizontal(test, 0, 0, 1)
+# get_arm_length(test, 0, 0, 0.75)
+# move_multiple(test)
+# time.sleep(2)
+
+# get_arm_length(test, 0, 0, 1)
 # move_multiple(test)
 # time.sleep(2)
 
