@@ -73,11 +73,15 @@ def compute_hand_scale(hand_landmarks):
     return (dx**2 + dy**2)**0.5
 
 def compute_grip(hand_landmarks):
-    palm = hand_landmarks[0]
+    # Palm center = average of the 4 MCP knuckle joints
+    palm_points = [hand_landmarks[i] for i in [5, 9, 13, 17]]
+    palm_x = sum(p.x for p in palm_points) / 4
+    palm_y = sum(p.y for p in palm_points) / 4
+
     fingertips = [hand_landmarks[i] for i in [4, 8, 12, 16, 20]]
     MAX_DIST = 0.35
     avg_dist = sum(
-        ((f.x - palm.x)**2 + (f.y - palm.y)**2)**0.5
+        ((f.x - palm_x)**2 + (f.y - palm_y)**2)**0.5
         for f in fingertips
     ) / len(fingertips)
     return round(1.0 - min(avg_dist / MAX_DIST, 1.0), 3)
@@ -137,30 +141,23 @@ def handle_pose_result(result, output_image: mp.Image, timestamp_ms: int):
     latest_pose_result = result
 
 def pick_one_hand(hand_result):
-    """Select the best right hand from detected hands."""
+    """Select the closest hand (largest scale) from detected hands."""
     if not hand_result or not hand_result.hand_landmarks:
         return None, None, None
-    
-    # Filter for right hands only
-    right_hand_indices = [
-        i for i in range(len(hand_result.handedness))
-        if hand_result.handedness[i][0].display_name == 'Right'
-    ]
-    
-    if not right_hand_indices:
-        return None, None, None
-    
-    if len(right_hand_indices) == 1:
-        idx = right_hand_indices[0]
+
+    if len(hand_result.hand_landmarks) == 1:
+        idx = 0
         return hand_result.hand_landmarks[idx], hand_result.hand_world_landmarks[idx], hand_result.handedness[idx][0]
-    
-    # Multiple right hands: select the one with highest confidence
-    right_scores = [
-        hand_result.handedness[i][0].score
-        for i in right_hand_indices
-    ]
-    best_right_index = right_hand_indices[right_scores.index(max(right_scores))]
-    return hand_result.hand_landmarks[best_right_index], hand_result.hand_world_landmarks[best_right_index], hand_result.handedness[best_right_index][0]
+
+    # Pick the hand with the largest scale (closest to camera)
+    scales = [compute_hand_scale(hand_result.hand_landmarks[i]) for i in range(len(hand_result.hand_landmarks))]
+    best_index = scales.index(max(scales))
+
+    return (
+        hand_result.hand_landmarks[best_index],
+        hand_result.hand_world_landmarks[best_index],
+        hand_result.handedness[best_index][0]
+    )
 
 def pick_one_arm(pose_landmarks, selected_handedness):
     """Select arm based on hand handedness."""
