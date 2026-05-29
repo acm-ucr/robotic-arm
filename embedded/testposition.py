@@ -91,3 +91,5 @@ while True:
     print("---- Servo Positions ----")
     read_all_positions()
     time.sleep(1)
+
+# write_position(3, 3000, 1)

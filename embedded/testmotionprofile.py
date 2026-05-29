@@ -13,7 +13,7 @@
 # Servo 2: (850, 3200)
 # Servo 3: (3100, 940)
 # Servo 4: (2940, 880)
-# Servo 5: (1050, 760)
+# Servo 5: (1050, 760) <- max rolls over 4095
 # Servo 6: (2030, 3500) 
 # waypoints:
 # 
@@ -41,8 +41,8 @@ serial_lock = threading.Lock()
 PORT = os.getenv("SERIAL_PORT")
 BAUDRATE = 1000000
 SERVO_IDS = [1, 2, 3, 4, 5, 6]
-TARGET_MAX_POSITIONS = {1: 3450, 2: 3200, 3: 940, 4: 880, 5: 760, 6: 3500}
-TARGET_MIN_POSITIONS = {1: 800, 2: 850, 3: 3100, 4: 2940, 5: 1050, 6: 2030}
+TARGET_MAX_POSITIONS = {1: 3450, 2: 3200, 3: 940, 4: 880, 5: 4095, 6: 3500}
+TARGET_MIN_POSITIONS = {1: 800, 2: 850, 3: 3100, 4: 2940, 5: 0, 6: 2030}
 MOVE_TIME = 200  # Default fallback for raw writes
 # Expected camera ranges   
 CAM_X_MIN, CAM_X_MAX = 0.0, 1.0
@@ -215,7 +215,7 @@ def execute_profiled_move_background(servo_id, target_pos, duration_sec=1.0, ste
 #         # Wait once per global step, rather than once per motor
 #         time.sleep(step_delay)
 
-def move_multiple(targets_dict, speed_units_per_sec=2000.0):
+def move_multiple(targets_dict, speed_units_per_sec=1500.0):
     """
     Moves multiple servos in perfect synchronization.
     Duration and steps are dynamically calculated based on the maximum change 
@@ -293,7 +293,12 @@ def position_of_angle(servo_id, move_angle):
 # moves motor 1
 # y is unused
 def get_base_angle(dict, x, y, z) :
-    baseAngle = math.degrees(math.atan(x/z)) # gets angle relative to the z axis
+    if (x == 0) :
+        baseAngle = 0
+    elif (z == 0) :
+        baseAngle = math.degrees(math.atan(2*x))
+    else : 
+        baseAngle = math.degrees(math.atan((2*x)/z)) # gets angle relative to the z axis
     dict[1] = position_of_angle(1, baseAngle)
 
 # UNTESTED
@@ -303,62 +308,92 @@ def get_base_angle(dict, x, y, z) :
 # (1, .., 1) : 2:3200, 3:940
 # ranges: motor 2: 2350, motor 3: 2160
 def get_arm_length(dict, x, y, z) :
-    lineLength = math.sqrt(x*x + y*y + z*z)
+    if x==0 and y==0 and z==0 :
+        lineLength = 0
+    else :
+        lineLength = math.sqrt(x*x + z*z)
+    if (lineLength > 1) :
+        lineLength = 1
     twoOffset = 2350 * lineLength
     threeOffset = 2160 * lineLength
     dict[2] = 850 + twoOffset
     dict[3] = 3100 - threeOffset
 
-# UNTESTED
 # calculates pitch angle (complementary angle to phi in spherical coords)
 # and adds offset of that angle to motor 2's position
 def get_pitch_angle(dict, x, y, z) :
     adjacent = math.sqrt(x*x + z*z)
     opposite = y
-    pitchAngle = math.degrees(math.atan(opposite/adjacent))
-    posOffset = pitchAngle * 11.3
-    dict[2] = dict[2] + posOffset
+    if (adjacent == 0) :
+        adjacent = 1
+    pitchAngle = abs(math.degrees(math.atan(opposite/adjacent)))
+    posOffset = pitchAngle * 15
+    dict[2] = dict[2] - posOffset
+
+def get_wrist_amt(dict, wrist) :
+    wristPos = 3795 * wrist # 3795 is range of motion
+    wristPos = 1060 + wristPos
+    if (wristPos >= 4095) :
+        wristPos = 4095
+    dict[5] = wristPos
 
 # ensures motors do not go outside of operating range
-def motor_clamping(dict) :
-    for id in dict.keys() :
-        if dict[id] > TARGET_MAX_POSITIONS[id] :
-            dict[id] = TARGET_MAX_POSITIONS
-        elif dict[id] < TARGET_MIN_POSITIONS[id] :
-            dict[id] = TARGET_MIN_POSITIONS[id]
+def motor_clamping(dict):
+    for id in dict.keys():
+        lo = min(TARGET_MIN_POSITIONS[id], TARGET_MAX_POSITIONS[id])
+        hi = max(TARGET_MIN_POSITIONS[id], TARGET_MAX_POSITIONS[id])
+        dict[id] = max(lo, min(hi, dict[id]))
 
-# UNTESTED
 # translates the x,y,z coords given from software in the perspective of the camera
 # X = [-0.5, 0.5], -0.5 = left of camera, 0.5 = right of camera
 # Y = [0, 1], 0 = bottom of camera, 1 = top of camera
 # Z = [0, 1], 0 = claw as close to base as possible, 1 = arm fully extended
-def move_arm(x, y, z): 
-    dict = {1:0, 2:0, 3:0, 4:0, 5:0, 6:0}
+def move_arm(x, y, z, grip, wrist): 
+    # dict = {1:2048, 2:850, 3:3100, 4:2940, 5:1050, 6:2030}
+    print("x:", x, ", y:", y, ", z:", z, ", grip:", grip, " wrist:", wrist)
+    dict = {1:2048, 2:0, 3:0, 4:0, 5:0, 6:0}
     get_base_angle(dict, x, y, z)
+    print(dict)
     get_arm_length(dict, x, y, z)
+    print(dict)
     get_pitch_angle(dict, x, y, z)
+    print(dict)
+    get_wrist_amt(dict, wrist)
+    print(dict)
     motor_clamping(dict)
+    print(dict)
 
     move_multiple(dict)
 
-# test = {1: 2048, 2: 850, 3:3100, 4: 880}
-# move_multiple(test)
-# time.sleep(1)
+test = {1: 2048, 2: 850, 3:3100, 4: 880}
+move_multiple(test)
+time.sleep(2)
 
-# get_arm_length(test, 0, 0, 0.25)
-# move_multiple(test)
+move_arm(0, 0, 0, 0, 0)
+time.sleep(2)
+# move_arm(0, 0, 1, 0, 0)
+# time.sleep(2)
+move_arm(0, 1, 1, 0, 0)
+time.sleep(1)
+move_arm(0, 1, 1, 0, 1)
+
+# move_arm(0.5, 0, 0, 0, 0)
+# time.sleep(2)
+# move_arm(-0.5, 0, 0, 0, 0)
+# time.sleep(2)
+# move_arm(0.5, 1, 0, 0, 0)
+# time.sleep(2)
+# move_arm(-0.5, 1, 0, 0, 0)
 # time.sleep(2)
 
-# get_arm_length(test, 0, 0, 0.5)
-# move_multiple(test)
+# move_arm(-0.5, 0, 1, 0, 0)
 # time.sleep(2)
+# move_arm(0.5, 0, 1, 0, 0)
+# time.sleep(2)
+# move_arm(0.5, 1, 1, 0, 0)
+# time.sleep(2)
+# move_arm(-0.5, 1, 1, 0, 0)
 
-# get_arm_length(test, 0, 0, 0.75)
-# move_multiple(test)
-# time.sleep(2)
 
-# get_arm_length(test, 0, 0, 1)
-# move_multiple(test)
-# time.sleep(2)
 
 

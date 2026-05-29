@@ -37,6 +37,13 @@ def subscribe(client: mqtt_client):
     def on_message(client, userdata, msg):
         decoded = json.loads(msg.payload.decode())
         print(decoded)
+
+        x = decoded.get("x", 0.0)
+        y = decoded.get("y", 0.0)
+        z = decoded.get("z", 0.0)
+        grip = decoded.get("grip", 0.0)
+
+        move_arm(x, y, z, grip)
         
 
     client.subscribe(topic)
