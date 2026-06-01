@@ -112,25 +112,7 @@ def compute_rotation(world_landmarks):
     angle = math.degrees(math.atan2(side_score, front_score))
     orientation_angle = round(angle, 1)
 
-    # Determine the orientation label in 8 sectors centered on front/right/back/left
-    if -22.5 <= angle <= 22.5:
-        orientation = 'front'
-    elif 22.5 < angle <= 67.5:
-        orientation = 'front right'
-    elif 67.5 < angle <= 112.5:
-        orientation = 'right'
-    elif 112.5 < angle <= 157.5:
-        orientation = 'back right'
-    elif angle > 157.5 or angle < -157.5:
-        orientation = 'back'
-    elif -157.5 <= angle < -112.5:
-        orientation = 'back left'
-    elif -112.5 <= angle < -67.5:
-        orientation = 'left'
-    else:
-        orientation = 'front left'
-
-    return orientation, orientation_angle
+    return orientation_angle
 
 def handle_hand_result(result, output_image: mp.Image, timestamp_ms: int):
     global latest_hand_result
@@ -201,19 +183,7 @@ def compute_pitch(world_landmarks, handedness):
     pitch_rad = math.asin(normal[1])
     pitch_angle = round(math.degrees(pitch_rad), 1)
 
-    # Map the angle to the requested states
-    if pitch_angle > 45:
-        pitch_orientation = 'facing floor'
-    elif 15 < pitch_angle <= 45:
-        pitch_orientation = 'floor-neutral'
-    elif -15 <= pitch_angle <= 15:
-        pitch_orientation = 'perpendicular'
-    elif -45 <= pitch_angle < -15:
-        pitch_orientation = 'neutral-ceiling'
-    else:
-        pitch_orientation = 'facing ceiling'
-
-    return pitch_orientation, pitch_angle
+    return pitch_angle
 
 def compute_roll(world_landmarks, handedness):
     """Compute the 'compass' direction of the hand based on the middle finger tip."""
@@ -234,26 +204,7 @@ def compute_roll(world_landmarks, handedness):
     roll_rad = math.atan2(y_comp, x_comp)
     roll_angle = round(math.degrees(roll_rad), 1)
 
-    # 4. Map the angle to 8 "compass" directions
-    # 0° is Right, 90° is Down (+Y), -90° is Up (-Y), +/-180° is Left
-    if -22.5 <= roll_angle <= 22.5:
-        roll_orientation = 'right'
-    elif 22.5 < roll_angle <= 67.5:
-        roll_orientation = 'down-right'
-    elif 67.5 < roll_angle <= 112.5:
-        roll_orientation = 'down'
-    elif 112.5 < roll_angle <= 157.5:
-        roll_orientation = 'down-left'
-    elif roll_angle > 157.5 or roll_angle < -157.5:
-        roll_orientation = 'left'
-    elif -157.5 <= roll_angle < -112.5:
-        roll_orientation = 'up-left'
-    elif -112.5 <= roll_angle < -67.5:
-        roll_orientation = 'up'
-    else:
-        roll_orientation = 'up-right'
-
-    return roll_orientation, roll_angle
+    return roll_angle
 
 # Configure MediaPipe options
 hand_options = HandLandmarkerOptions(
@@ -368,9 +319,9 @@ with HandLandmarker.create_from_options(hand_options) as hand_landmarker, \
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
             
             # --- CALCULATE ALL 3 AXES ---
-            pitch_orientation, pitch_angle = compute_pitch(selected_world_hand, selected_handedness)
-            roll_orientation, roll_angle = compute_roll(selected_world_hand, selected_handedness)
-            orientation, orientation_angle = compute_rotation(selected_world_hand) # Yaw
+            pitch_angle = compute_pitch(selected_world_hand, selected_handedness)
+            roll_angle = compute_roll(selected_world_hand, selected_handedness)
+            orientation_angle = compute_rotation(selected_world_hand)
             grip = compute_grip(selected_hand)
 
             # --- PUBLISH MQTT DATA ---
@@ -379,20 +330,14 @@ with HandLandmarker.create_from_options(hand_options) as hand_landmarker, \
                 "y": round(wrist.y, 3),
                 "z": round(z_value, 3),
                 "grip": grip,
-                "palm_orientation": orientation,  # Yaw
                 "orientation_angle": orientation_angle,
-                "pitch_orientation": pitch_orientation,
                 "pitch_angle": pitch_angle,
-                "roll_orientation": roll_orientation,  # NEW: Roll
-                "roll_angle": roll_angle               # NEW: Roll Angle
+                "roll_angle": roll_angle 
             })
             mqtt_client.publish(TOPIC_PUB, payload)
 
             # --- PRINT DEBUG INFO ---
-            print(f"Hand: {selected_handedness.display_name} | Z: {z_value:.3f} | Grip: {grip:.3f} | "
-                  f"Yaw: {orientation} ({orientation_angle}°) | "
-                  f"Pitch: {pitch_orientation} ({pitch_angle}°) | "
-                  f"Roll: {roll_orientation} ({roll_angle}°)")
+            print(f"Hand: {selected_handedness.display_name} | Z: {z_value:.3f} | Grip: {grip:.3f} | Yaw: {orientation_angle}° | Pitch: {pitch_angle}° | Roll: {roll_angle}°")
 
         cv2.imshow('Hand + Pose Tracking with Distance', frame)
 
