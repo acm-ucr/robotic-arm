@@ -330,12 +330,51 @@ def get_pitch_angle(dict, x, y, z) :
     posOffset = pitchAngle * 15
     dict[2] = dict[2] - posOffset
 
-def get_wrist_amt(dict, wrist) :
-    wristPos = 3795 * wrist # 3795 is range of motion
-    wristPos = 1060 + wristPos
-    if (wristPos >= 4095) :
-        wristPos = 4095
-    dict[5] = wristPos
+
+# value between 0 - 1 open - closed, grip range = 1470
+def get_grip_amt(dict, grip) :
+    gripPos = 1470 * grip
+    gripPos = 2030 + gripPos
+    dict[6] = gripPos
+
+last_roll = -10000  # module-level state
+
+def normalize_roll(new_roll, last_roll):
+    """
+    Picks the equivalent angle representation of new_roll 
+    that is closest to last_roll, to avoid 360-degree flips.
+    """
+    diff = (new_roll - last_roll + 180) % 360 - 180
+    return last_roll + diff
+
+# roll: -90 = palm facing camera right (motor at SERVO5_MIN = 1050)
+#         0 = palm facing you          (motor at midpoint ~3022)
+#        90 = palm facing camera left  (motor at SERVO5_MAX = 760, after wrap)
+SERVO5_ROLL_RANGE = 3805  # (4095 - 1050) + 760
+def get_roll_amt(dict, roll):
+    global last_roll
+    
+    roll = normalize_roll(roll, last_roll)
+    last_roll = roll
+    
+    # Normalize from [-90, 90] to [0.0, 1.0]
+    t = (roll + 90) / 180.0
+    t = max(0.0, min(1.0, t))  # clamp just in case
+    
+    raw_pos = 760 + t * SERVO5_ROLL_RANGE
+    pos = int(raw_pos) % (4095 + 1)
+    
+    dict[5] = pos
+
+# wrist_pitch: 0 = upright, -90 = palm up, 90 = palm down
+# range = 2060
+def get_wrist_pitch(dict, wrist_pitch) :
+    wrist_pitch = wrist_pitch + 90 # 0 = palm up, 90 = upright, 180 = palm down
+    pitch_amt = wrist_pitch/180 # 0 = palm up, 1 = palm down
+    wrist_pos = pitch_amt * 2060
+    wrist_pos = wrist_pos + 880
+    dict[4] = wrist_pos
+
 
 # ensures motors do not go outside of operating range
 def motor_clamping(dict):
@@ -348,20 +387,25 @@ def motor_clamping(dict):
 # X = [-0.5, 0.5], -0.5 = left of camera, 0.5 = right of camera
 # Y = [0, 1], 0 = bottom of camera, 1 = top of camera
 # Z = [0, 1], 0 = claw as close to base as possible, 1 = arm fully extended
-def move_arm(x, y, z, grip, wrist): 
+def move_arm(x, y, z, grip, roll, wrist_pitch): 
+    if last_roll == -10000:
+        last_roll = roll
     # dict = {1:2048, 2:850, 3:3100, 4:2940, 5:1050, 6:2030}
-    print("x:", x, ", y:", y, ", z:", z, ", grip:", grip, " wrist:", wrist)
+    print("x:", x, ", y:", y, ", z:", z, ", grip:", grip, " wrist:", wrist_pitch)
     dict = {1:2048, 2:0, 3:0, 4:0, 5:0, 6:0}
     get_base_angle(dict, x, y, z)
-    print(dict)
+    # print(dict)
     get_arm_length(dict, x, y, z)
-    print(dict)
+    # print(dict)
     get_pitch_angle(dict, x, y, z)
-    print(dict)
-    get_wrist_amt(dict, wrist)
-    print(dict)
+    # print(dict)
+    get_roll_amt(dict, roll)
+    # print(dict)
+    get_grip_amt(dict, grip)
+    # print(dict)
+    get_wrist_pitch(dict, wrist_pitch)
     motor_clamping(dict)
-    print(dict)
+    # print(dict)
 
     move_multiple(dict)
 
@@ -395,5 +439,10 @@ move_arm(0, 1, 1, 0, 1)
 # move_arm(-0.5, 1, 1, 0, 0)
 
 
-
-
+# while (1) :
+#     test = {6: 4095}
+#     move_multiple(test)
+#     time.sleep(0.5)
+#     test[6] = 100
+#     move_multiple(test)
+#     time.sleep(0.5)

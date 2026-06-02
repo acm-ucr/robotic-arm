@@ -32,7 +32,15 @@ def connect_mqtt() -> mqtt_client.Client:
     client.connect(broker, port)
     return client
 
-#Format: {"x": 0.233, "y": 0.593, "z": 0, "grip": 0.857, "palm_orientation": "left", "orientation_angle": -90.0}
+# payload:
+#"x": round(wrist.x, 3) - 0.5,
+#"y": round(wrist.y, 3),
+#"z": round(z_value, 3),
+#"grip": grip, (0, 1)
+#"orientation_angle": orientation_angle, - motor 5, palm facing you - 0, palm facing camera right - 90, 
+# palm facing camera left - -90, palm facing camera - oscillates -180 and 180
+#"pitch_angle": pitch_angle, - motor 4 (-90, 90) degrees, 0 = upright, 90 = palm down, -90 = palm up
+
 def subscribe(client: mqtt_client):
     def on_message(client, userdata, msg):
         decoded = json.loads(msg.payload.decode())
@@ -42,8 +50,10 @@ def subscribe(client: mqtt_client):
         y = decoded.get("y", 0.0)
         z = decoded.get("z", 0.0)
         grip = decoded.get("grip", 0.0)
+        orientation_angle = decoded.get("orientation_angle", 0.0)
+        pitch_angle = decoded.get("pitch_angle", 0.0)
 
-        move_arm(x, y, z, grip)
+        move_arm(x, y, z, grip, orientation_angle, pitch_angle)
         
 
     client.subscribe(topic)
