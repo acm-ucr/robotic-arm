@@ -3,7 +3,7 @@
 # python 3.11
 import json
 import random
-from testmotionprofile import move_arm
+from testmotionprofile import enqueue_move
 from paho.mqtt import client as mqtt_client
 
 
@@ -53,7 +53,7 @@ def subscribe(client: mqtt_client):
         orientation_angle = decoded.get("orientation_angle", 0.0)
         pitch_angle = decoded.get("pitch_angle", 0.0)
 
-        move_arm(x, y, z, grip, orientation_angle, pitch_angle)
+        enqueue_move(x, y, z, grip, orientation_angle, pitch_angle)
         
 
     client.subscribe(topic)

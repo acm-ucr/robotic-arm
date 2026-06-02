@@ -122,6 +122,42 @@ def default_pos():
     move_multiple(move_claw, 2)
     move_multiple(move_arm, 2)
     move_multiple(move_wrist, 2)
+# --- State ---
+_move_lock = threading.Lock()
+_pending_command = None
+_pending_lock = threading.Lock()
+
+def _move_worker():
+    """Continuously processes the latest pending command."""
+    global _pending_command
+    while True:
+        # Grab the latest command if one exists
+        with _pending_lock:
+            cmd = _pending_command
+            _pending_command = None
+
+        if cmd is not None:
+            with _move_lock:
+                try:
+                    move_arm(*cmd)
+                except Exception as e:
+                    print(f"move_arm error: {e}")
+        else:
+            time.sleep(0.01)  # idle poll, 10ms
+
+# Start the worker thread once at startup
+_worker_thread = threading.Thread(target=_move_worker, daemon=True)
+_worker_thread.start()
+
+def enqueue_move(x, y, z, grip, orientation_angle, pitch_angle):
+    """
+    Drops all but the latest command while a move is executing.
+    If the arm is busy, the new command overwrites the pending one.
+    If the arm is free, it gets picked up immediately on the next worker cycle.
+    """
+    global _pending_command
+    with _pending_lock:
+        _pending_command = (x, y, z, grip, orientation_angle, pitch_angle)
 
 # ==========================================
 # ====== MOTION PROFILING / INTERPOLATION ======
@@ -215,7 +251,7 @@ def execute_profiled_move_background(servo_id, target_pos, duration_sec=1.0, ste
 #         # Wait once per global step, rather than once per motor
 #         time.sleep(step_delay)
 
-def move_multiple(targets_dict, speed_units_per_sec=1500.0):
+def move_multiple(targets_dict, speed_units_per_sec=2000.0):
     """
     Moves multiple servos in perfect synchronization.
     Duration and steps are dynamically calculated based on the maximum change 
@@ -387,39 +423,45 @@ def motor_clamping(dict):
 # X = [-0.5, 0.5], -0.5 = left of camera, 0.5 = right of camera
 # Y = [0, 1], 0 = bottom of camera, 1 = top of camera
 # Z = [0, 1], 0 = claw as close to base as possible, 1 = arm fully extended
+dict = {1:0, 2:0, 3:0, 4:0, 5:0, 6:0}
+
 def move_arm(x, y, z, grip, roll, wrist_pitch): 
+    global last_roll
+    global dict
     if last_roll == -10000:
         last_roll = roll
+    for servo_id in dict :
+        dict[servo_id] = read_position(servo_id)
     # dict = {1:2048, 2:850, 3:3100, 4:2940, 5:1050, 6:2030}
     print("x:", x, ", y:", y, ", z:", z, ", grip:", grip, " wrist:", wrist_pitch)
-    dict = {1:2048, 2:0, 3:0, 4:0, 5:0, 6:0}
+    
     get_base_angle(dict, x, y, z)
     # print(dict)
     get_arm_length(dict, x, y, z)
-    # print(dict)
+    # # print(dict)
     get_pitch_angle(dict, x, y, z)
-    # print(dict)
-    get_roll_amt(dict, roll)
-    # print(dict)
-    get_grip_amt(dict, grip)
-    # print(dict)
-    get_wrist_pitch(dict, wrist_pitch)
+    # # print(dict)
+    # get_roll_amt(dict, roll)
+    # # print(dict)
+    # get_grip_amt(dict, grip)
+    # # print(dict)
+    # get_wrist_pitch(dict, wrist_pitch)
     motor_clamping(dict)
     # print(dict)
 
     move_multiple(dict)
 
-test = {1: 2048, 2: 850, 3:3100, 4: 880}
-move_multiple(test)
-time.sleep(2)
-
-move_arm(0, 0, 0, 0, 0)
-time.sleep(2)
-# move_arm(0, 0, 1, 0, 0)
+# test = {1: 2048, 2: 850, 3:3100, 4: 880}
+# move_multiple(test)
 # time.sleep(2)
-move_arm(0, 1, 1, 0, 0)
-time.sleep(1)
-move_arm(0, 1, 1, 0, 1)
+
+# move_arm(0, 0, 0, 0, 0)
+# time.sleep(2)
+# # move_arm(0, 0, 1, 0, 0)
+# # time.sleep(2)
+# move_arm(0, 1, 1, 0, 0)
+# time.sleep(1)
+# move_arm(0, 1, 1, 0, 1)
 
 # move_arm(0.5, 0, 0, 0, 0)
 # time.sleep(2)
